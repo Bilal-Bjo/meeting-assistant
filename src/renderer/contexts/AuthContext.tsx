@@ -20,9 +20,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
+      console.log('[Auth] Fetching profile for:', userId)
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -30,63 +32,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single()
       
       if (error) {
-        console.error('Error fetching profile:', error)
-        // Don't block auth if profile fetch fails - just use null profile
+        console.log('[Auth] Profile fetch error (non-fatal):', error.message)
         return null
       }
+      console.log('[Auth] Profile fetched successfully')
       return data as UserProfile
     } catch (err) {
-      console.error('Exception fetching profile:', err)
+      console.log('[Auth] Profile exception (non-fatal):', err)
       return null
     }
   }, [])
 
   useEffect(() => {
     let mounted = true
+    console.log('[Auth] Initializing auth...')
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Set up auth state change listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('[Auth] Auth state changed:', event, newSession ? 'has session' : 'no session')
+      
       if (!mounted) return
+
+      // Update state
+      setSession(newSession)
+      setUser(newSession?.user ?? null)
       
-      setSession(session)
-      setUser(session?.user ?? null)
-      
-      if (session?.user) {
-        fetchProfile(session.user.id).then((prof) => {
-          if (mounted) setProfile(prof)
-        }).catch((err) => {
-          console.error('Profile fetch failed:', err)
-        }).finally(() => {
-          if (mounted) setLoading(false)
-        })
-      } else {
+      // CRITICAL: Set loading to false when we get auth state
+      if (!initialized) {
+        console.log('[Auth] First auth event - setting initialized')
+        setInitialized(true)
         setLoading(false)
       }
-    }).catch((err) => {
-      console.error('Session check failed:', err)
-      if (mounted) setLoading(false)
-    })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return
-      
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        const prof = await fetchProfile(session.user.id)
-        setProfile(prof)
+      // Fetch profile in background (non-blocking)
+      if (newSession?.user) {
+        fetchProfile(newSession.user.id).then((prof) => {
+          if (mounted) setProfile(prof)
+        })
       } else {
         setProfile(null)
       }
     })
 
+    // Timeout fallback - if nothing happens in 3 seconds, stop loading
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.log('[Auth] Timeout - forcing loading to false')
+        setLoading(false)
+      }
+    }, 3000)
+
     return () => {
       mounted = false
+      clearTimeout(timeout)
       subscription.unsubscribe()
     }
-  }, [fetchProfile])
+  }, [fetchProfile, initialized, loading])
 
   const signIn = useCallback(async (email: string, password: string) => {
+    console.log('[Auth] Signing in...')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) console.log('[Auth] Sign in error:', error.message)
+    else console.log('[Auth] Sign in successful')
     return { error: error as Error | null }
   }, [])
 
@@ -102,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    console.log('[Auth] Signing out...')
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
@@ -121,6 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return { error: error as Error | null }
   }, [user, profile])
+
+  console.log('[Auth] Render - loading:', loading, 'user:', user?.email ?? 'none')
 
   return (
     <AuthContext.Provider value={{
@@ -145,4 +155,3 @@ export function useAuth() {
   }
   return context
 }
-

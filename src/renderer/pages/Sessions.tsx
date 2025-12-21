@@ -95,8 +95,32 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616', position: 'relative', overflow: 'hidden' }}
     >
+      {/* Ambient blue glows */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '-15%',
+        width: 600,
+        height: 600,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.12) 0%, rgba(91, 127, 255, 0.04) 30%, transparent 70%)',
+        filter: 'blur(80px)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-15%',
+        right: '-10%',
+        width: 500,
+        height: 500,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.1) 0%, rgba(59, 91, 219, 0.03) 30%, transparent 70%)',
+        filter: 'blur(70px)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+
       <header style={{
         height: 48,
         display: 'flex',
@@ -105,6 +129,8 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
         padding: '0 16px',
         paddingLeft: 80,
         borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+        position: 'relative',
+        zIndex: 1,
         gap: 4,
         WebkitAppRegion: 'drag'
       } as React.CSSProperties}>
@@ -241,7 +267,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
         </div>
       </div>
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '0 32px 64px' }}>
+      <main style={{ flex: 1, overflowY: 'auto', padding: '0 32px 64px', position: 'relative', zIndex: 1 }}>
         <div>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>

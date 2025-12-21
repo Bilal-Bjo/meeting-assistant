@@ -1,18 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Volume2, Cpu, Monitor, X } from 'lucide-react'
+import { ArrowLeft, Volume2, Cpu, Monitor, X, User, LogOut } from 'lucide-react'
 import type { Settings as SettingsType } from '@shared/types'
 import type { DesktopSource } from '@shared/ipc'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
   onClose: () => void
 }
 
-type Tab = 'audio' | 'ai'
+type Tab = 'audio' | 'ai' | 'account'
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'audio', label: 'Audio', icon: <Volume2 style={{ width: 18, height: 18 }} /> },
   { id: 'ai', label: 'AI Models', icon: <Cpu style={{ width: 18, height: 18 }} /> },
+  { id: 'account', label: 'Account', icon: <User style={{ width: 18, height: 18 }} /> },
 ]
 
 function MacOSAudioSection({ 
@@ -143,6 +145,7 @@ function MacOSAudioSection({
 }
 
 export function Settings({ onClose }: Props) {
+  const { user, profile, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('audio')
   const [settings, setSettings] = useState<SettingsType | null>(null)
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
@@ -151,6 +154,12 @@ export function Settings({ onClose }: Props) {
   const [showSourcePicker, setShowSourcePicker] = useState(false)
   const [desktopSources, setDesktopSources] = useState<DesktopSource[]>([])
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    await signOut()
+  }
 
   useEffect(() => {
     Promise.all([
@@ -218,7 +227,7 @@ export function Settings({ onClose }: Props) {
         justifyContent: 'center',
         color: '#71717a',
         fontSize: 14,
-        background: '#09090b'
+        background: '#161616'
       }}>
         Loading...
       </div>
@@ -236,7 +245,7 @@ export function Settings({ onClose }: Props) {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: '#09090b'
+        background: '#161616'
       }}
     >
       <header style={{
@@ -552,6 +561,98 @@ export function Settings({ onClose }: Props) {
                       Output language for summaries, action items, and chat responses.
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'account' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{
+                  background: '#18181b',
+                  border: '1px solid #27272a',
+                  borderRadius: 12,
+                  padding: 24
+                }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 600, color: 'white', margin: '0 0 24px 0' }}>Profile</h2>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                    <div style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 16,
+                      background: 'linear-gradient(135deg, #5b7fff 0%, #3b5bdb 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 24,
+                      fontWeight: 600,
+                      color: 'white'
+                    }}>
+                      {(profile?.full_name || user?.email || '?')[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 16, fontWeight: 600, color: 'white', margin: 0 }}>
+                        {profile?.full_name || 'User'}
+                      </p>
+                      <p style={{ fontSize: 14, color: '#71717a', margin: '4px 0 0 0' }}>
+                        {user?.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ 
+                    padding: 16, 
+                    background: 'rgba(39, 39, 42, 0.5)', 
+                    borderRadius: 8,
+                    marginBottom: 16
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, color: '#71717a' }}>Member since</span>
+                      <span style={{ fontSize: 13, color: 'white' }}>
+                        {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 13, color: '#71717a' }}>User ID</span>
+                      <span style={{ fontSize: 13, color: '#71717a', fontFamily: 'monospace' }}>
+                        {user?.id?.slice(0, 8)}...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  background: '#18181b',
+                  border: '1px solid #27272a',
+                  borderRadius: 12,
+                  padding: 24
+                }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 600, color: 'white', margin: '0 0 16px 0' }}>Sign Out</h2>
+                  <p style={{ fontSize: 13, color: '#71717a', marginBottom: 16 }}>
+                    Sign out of your account on this device.
+                  </p>
+                  <button
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    style={{
+                      height: 40,
+                      padding: '0 20px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      color: '#f87171',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      borderRadius: 8,
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      cursor: loggingOut ? 'not-allowed' : 'pointer',
+                      opacity: loggingOut ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8
+                    }}
+                  >
+                    <LogOut style={{ width: 16, height: 16 }} />
+                    {loggingOut ? 'Signing out...' : 'Sign Out'}
+                  </button>
                 </div>
               </div>
             )}

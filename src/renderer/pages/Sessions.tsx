@@ -95,7 +95,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#09090b' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616' }}
     >
       <header style={{
         height: 48,
@@ -167,27 +167,37 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
               style={{
                 height: 36,
                 padding: '0 12px',
-                background: irlMode ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                color: irlMode ? '#22c55e' : '#a3a3a3',
-                fontSize: 12,
-                fontWeight: 600,
-                borderRadius: 999,
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'transparent',
+                border: 'none',
                 cursor: 'pointer',
-                whiteSpace: 'nowrap',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8
+                gap: 10,
               }}
-              title="In-person meeting mode"
+              title="Toggle in-person mode"
             >
-              <span style={{
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                background: irlMode ? '#22c55e' : '#404040'
-              }} />
-              IRL
+              <span style={{ fontSize: 13, color: '#a1a1aa', fontWeight: 500 }}>IRL</span>
+              <div style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                background: irlMode ? 'linear-gradient(135deg, #5b7fff 0%, #3b5bdb 100%)' : '#27272a',
+                position: 'relative',
+                transition: 'background 0.2s',
+                boxShadow: irlMode ? '0 2px 8px rgba(91, 127, 255, 0.3)' : 'none',
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: irlMode ? 22 : 2,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  background: 'white',
+                  transition: 'left 0.2s',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                }} />
+              </div>
             </button>
             <button
               onClick={() => setShowImportModal(true)}
@@ -280,7 +290,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
                     position: 'sticky',
                     top: 0,
                     zIndex: 10,
-                    background: '#09090b',
+                    background: '#161616',
                     padding: '20px 0 10px',
                     marginBottom: 4
                   }}>
@@ -394,7 +404,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
                     width: '100%',
                     height: 240,
                     padding: 12,
-                    background: '#09090b',
+                    background: '#161616',
                     border: '1px solid #27272a',
                     borderRadius: 8,
                     color: 'white',

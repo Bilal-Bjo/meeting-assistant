@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, session } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import path from 'path'
 import { IPC_CHANNELS } from '../shared/ipc'
 import { initDatabase, db } from './database'
@@ -23,9 +24,10 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#09090b',
+    backgroundColor: '#161616',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../../preload/preload.js'),
       contextIsolation: true,
@@ -75,6 +77,29 @@ app.whenReady().then(async () => {
       mainWindow.webContents.toggleDevTools()
     }
   })
+
+  // Auto-updater configuration
+  if (!isDev) {
+    autoUpdater.logger = console
+    autoUpdater.checkForUpdatesAndNotify()
+
+    autoUpdater.on('update-available', () => {
+      console.log('Update available, downloading...')
+    })
+
+    autoUpdater.on('update-downloaded', () => {
+      console.log('Update downloaded, will install on quit')
+      // Optionally notify user via IPC
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-downloaded')
+      }
+    })
+
+    // Check for updates every hour
+    setInterval(() => {
+      autoUpdater.checkForUpdatesAndNotify()
+    }, 60 * 60 * 1000)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

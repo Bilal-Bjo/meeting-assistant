@@ -1,15 +1,19 @@
 import { useState, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Session } from '@shared/types'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { Login } from './pages/Login'
 import { Sessions } from './pages/Sessions'
 import { InCall } from './pages/InCall'
 import { Settings } from './pages/Settings'
 import { MeetingDetail } from './pages/MeetingDetail'
 import { Analytics } from './pages/Analytics'
+import { Loader2 } from 'lucide-react'
 
 type AppView = 'sessions' | 'in-call' | 'settings' | 'meeting-detail' | 'analytics'
 
-export function App() {
+function AppContent() {
+  const { user, loading } = useAuth()
   const [view, setView] = useState<AppView>('sessions')
   const [currentSession, setCurrentSession] = useState<Session | null>(null)
   const [detailSessionId, setDetailSessionId] = useState<string | null>(null)
@@ -59,6 +63,28 @@ export function App() {
   }, [])
   const handleOpenAnalytics = useCallback(() => setView('analytics'), [])
   const handleCloseAnalytics = useCallback(() => setView('sessions'), [])
+
+  if (loading) {
+    return (
+      <div 
+        className="h-screen flex items-center justify-center"
+        style={{ background: '#161616' }}
+      >
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}
+        >
+          <Loader2 size={32} className="animate-spin" style={{ color: '#5b7fff' }} />
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>Loading...</p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Login />
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--background-secondary)]">
@@ -119,5 +145,13 @@ export function App() {
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }

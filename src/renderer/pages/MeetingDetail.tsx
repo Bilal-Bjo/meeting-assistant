@@ -93,7 +93,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
         justifyContent: 'center',
         color: '#71717a',
         fontSize: 14,
-        background: '#09090b'
+        background: '#161616'
       }}>
         Loading...
       </div>
@@ -139,7 +139,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: '#09090b'
+        background: '#161616'
       }}
     >
       <header style={{

@@ -39,7 +39,7 @@ export function Analytics({ onClose }: Props) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#09090b' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616' }}
     >
       <header style={{
         height: 48,

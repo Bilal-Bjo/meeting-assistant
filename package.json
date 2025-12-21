@@ -1,7 +1,7 @@
 {
-  "name": "meeting-recorder",
+  "name": "meeting-copilot",
   "version": "1.0.0",
-  "description": "Meeting Recorder - AI-powered meeting transcription and analysis",
+  "description": "TLDM - Too Long; Didn't Meet - AI-powered meeting transcription and analysis",
   "main": "dist/main/main/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
@@ -22,11 +22,13 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@supabase/supabase-js": "^2.89.0",
     "@tailwindcss/postcss": "^4.1.18",
     "autoprefixer": "^10.4.23",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.6.2",
     "framer-motion": "^12.23.26",
     "lucide-react": "^0.562.0",
     "postcss": "^8.5.6",
@@ -53,8 +55,8 @@
     "vite": "^6.0.3"
   },
   "build": {
-    "appId": "com.meetingrecorder.app",
-    "productName": "Meeting Recorder",
+    "appId": "com.tldm.app",
+    "productName": "TLDM",
     "directories": {
       "output": "release"
     },
@@ -66,6 +68,13 @@
       "node_modules/better-sqlite3/**/*",
       "node_modules/naudiodon/**/*"
     ],
+    "icon": "build/logo-icon.jpg",
+    "publish": {
+      "provider": "github",
+      "owner": "Bilal-Bjo",
+      "repo": "meeting-assistant",
+      "private": true
+    },
     "mac": {
       "target": [
         "dmg",
@@ -76,6 +85,7 @@
       "gatekeeperAssess": false,
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
+      "icon": "build/logo-icon.jpg",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Meeting Recorder needs microphone access to transcribe your meetings."
       }
@@ -85,6 +95,7 @@
         "nsis",
         "portable"
       ],
+      "icon": "build/logo-icon.jpg",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {

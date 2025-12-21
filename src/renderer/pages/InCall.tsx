@@ -215,7 +215,7 @@ registerProcessor('pcm-processor', PCMProcessor)
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#09090b' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616' }}
     >
       {/* Header */}
       <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 0 80px', borderBottom: '1px solid #27272a', WebkitAppRegion: 'drag' } as React.CSSProperties}>

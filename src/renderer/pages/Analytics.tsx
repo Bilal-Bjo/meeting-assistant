@@ -39,8 +39,31 @@ export function Analytics({ onClose }: Props) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616', position: 'relative', overflow: 'hidden' }}
     >
+      {/* Ambient blue glows */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '-15%',
+        width: 700,
+        height: 700,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.25) 0%, rgba(91, 127, 255, 0.1) 30%, transparent 70%)',
+        filter: 'blur(100px)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-15%',
+        right: '-10%',
+        width: 600,
+        height: 600,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.2) 0%, rgba(59, 91, 219, 0.08) 30%, transparent 70%)',
+        filter: 'blur(90px)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
       <header style={{
         height: 48,
         display: 'flex',

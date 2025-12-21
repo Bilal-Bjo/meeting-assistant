@@ -149,7 +149,6 @@ export function Settings({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('audio')
   const [settings, setSettings] = useState<SettingsType | null>(null)
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
-  const [saving, setSaving] = useState(false)
   const [platform, setPlatform] = useState<string>('darwin')
   const [showSourcePicker, setShowSourcePicker] = useState(false)
   const [desktopSources, setDesktopSources] = useState<DesktopSource[]>([])
@@ -205,18 +204,15 @@ export function Settings({ onClose }: Props) {
 
   const handleChange = useCallback(
     <K extends keyof SettingsType>(key: K, value: SettingsType[K]) => {
-      setSettings((prev) => (prev ? { ...prev, [key]: value } : prev))
+      setSettings((prev) => {
+        if (!prev) return prev
+        const updated = { ...prev, [key]: value }
+        window.api.settings.set(updated)
+        return updated
+      })
     },
     []
   )
-
-  const handleSave = useCallback(async () => {
-    if (!settings) return
-    setSaving(true)
-    await window.api.settings.set(settings)
-    setSaving(false)
-    onClose()
-  }, [settings, onClose])
 
   if (!settings) {
     return (
@@ -255,10 +251,10 @@ export function Settings({ onClose }: Props) {
         position: 'absolute',
         top: '-10%',
         left: '-15%',
-        width: 600,
-        height: 600,
-        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.12) 0%, rgba(91, 127, 255, 0.04) 30%, transparent 70%)',
-        filter: 'blur(80px)',
+        width: 700,
+        height: 700,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.25) 0%, rgba(91, 127, 255, 0.1) 30%, transparent 70%)',
+        filter: 'blur(100px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
@@ -266,10 +262,10 @@ export function Settings({ onClose }: Props) {
         position: 'absolute',
         bottom: '-15%',
         right: '-10%',
-        width: 500,
-        height: 500,
-        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.1) 0%, rgba(59, 91, 219, 0.03) 30%, transparent 70%)',
-        filter: 'blur(70px)',
+        width: 600,
+        height: 600,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.2) 0%, rgba(59, 91, 219, 0.08) 30%, transparent 70%)',
+        filter: 'blur(90px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
@@ -306,25 +302,6 @@ export function Settings({ onClose }: Props) {
           </button>
           <span style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Settings</span>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          style={{
-            height: 32,
-            padding: '0 16px',
-            background: '#5b7fff',
-            color: 'white',
-            fontSize: 14,
-            fontWeight: 500,
-            borderRadius: 8,
-            border: 'none',
-            cursor: 'pointer',
-            opacity: saving ? 0.6 : 1,
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties}
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </button>
       </header>
 
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '220px 1fr', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
@@ -638,12 +615,6 @@ export function Settings({ onClose }: Props) {
                       <span style={{ fontSize: 13, color: '#71717a' }}>Member since</span>
                       <span style={{ fontSize: 13, color: 'white' }}>
                         {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 13, color: '#71717a' }}>User ID</span>
-                      <span style={{ fontSize: 13, color: '#71717a', fontFamily: 'monospace' }}>
-                        {user?.id?.slice(0, 8)}...
                       </span>
                     </div>
                   </div>

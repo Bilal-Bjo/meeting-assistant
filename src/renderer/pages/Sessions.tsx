@@ -313,10 +313,6 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
               {Object.entries(grouped).map(([label, items], groupIndex) => (
                 <section key={label} style={{ marginTop: groupIndex === 0 ? 0 : 8 }}>
                   <div style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 10,
-                    background: '#161616',
                     padding: '20px 0 10px',
                     marginBottom: 4
                   }}>

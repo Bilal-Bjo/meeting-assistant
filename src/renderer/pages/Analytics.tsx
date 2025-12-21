@@ -20,6 +20,7 @@ interface Props {
 export function Analytics({ onClose }: Props) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
+  const [platform, setPlatform] = useState<string>('darwin')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -30,6 +31,7 @@ export function Analytics({ onClose }: Props) {
 
   useEffect(() => {
     loadData()
+    window.api.system.getPlatform().then(setPlatform)
   }, [loadData])
 
   const stats = computeStats(sessions)
@@ -69,7 +71,7 @@ export function Analytics({ onClose }: Props) {
         display: 'flex',
         alignItems: 'center',
         padding: '0 16px',
-        paddingLeft: 80,
+        paddingLeft: platform === 'darwin' ? 80 : 16,
         borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         gap: 12,
         WebkitAppRegion: 'drag'

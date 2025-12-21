@@ -276,7 +276,7 @@ export function Settings({ onClose }: Props) {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
-        paddingLeft: 80,
+        paddingLeft: platform === 'darwin' ? 80 : 16,
         borderBottom: '1px solid rgba(39, 39, 42, 0.5)',
         WebkitAppRegion: 'drag',
         position: 'relative',

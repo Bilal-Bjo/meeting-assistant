@@ -15,6 +15,7 @@ export function InCall({ session, onEndCall }: Props) {
   const [errorText, setErrorText] = useState<string | null>(null)
   const [duration, setDuration] = useState(0)
   const [segmentCount, setSegmentCount] = useState(0)
+  const [platform, setPlatform] = useState<string>('darwin')
   
   const startTimeRef = useRef(Date.now())
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -26,6 +27,7 @@ export function InCall({ session, onEndCall }: Props) {
   const settingsRef = useRef<SettingsType | null>(null)
 
   useEffect(() => {
+    window.api.system.getPlatform().then(setPlatform)
     const interval = setInterval(() => {
       setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000))
     }, 1000)
@@ -241,7 +243,7 @@ registerProcessor('pcm-processor', PCMProcessor)
         zIndex: 0,
       }} />
       {/* Header */}
-      <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 0 80px', borderBottom: '1px solid #27272a', WebkitAppRegion: 'drag' } as React.CSSProperties}>
+      <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 16px 0 ${platform === 'darwin' ? 80 : 16}px`, borderBottom: '1px solid #27272a', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           {isConnected && (
             <motion.div

@@ -18,6 +18,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
   const [showImportModal, setShowImportModal] = useState(false)
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
+  const [platform, setPlatform] = useState<string>('darwin')
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
@@ -32,6 +33,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
 
   useEffect(() => {
     loadSessions()
+    window.api.system.getPlatform().then(setPlatform)
   }, [loadSessions])
 
   useEffect(() => {
@@ -127,7 +129,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
         alignItems: 'center',
         justifyContent: 'flex-end',
         padding: '0 16px',
-        paddingLeft: 80,
+        paddingLeft: platform === 'darwin' ? 80 : 16,
         borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         position: 'relative',
         zIndex: 1,

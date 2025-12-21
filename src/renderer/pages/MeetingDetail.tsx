@@ -19,6 +19,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [streamingText, setStreamingText] = useState('')
+  const [platform, setPlatform] = useState<string>('darwin')
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
@@ -36,6 +37,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
 
   useEffect(() => {
     loadData()
+    window.api.system.getPlatform().then(setPlatform)
   }, [loadData])
 
   useEffect(() => {
@@ -173,7 +175,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
         display: 'flex',
         alignItems: 'center',
         padding: '0 16px',
-        paddingLeft: 80,
+        paddingLeft: platform === 'darwin' ? 80 : 16,
         borderBottom: '1px solid rgba(39, 39, 42, 0.5)',
         WebkitAppRegion: 'drag',
         position: 'relative',

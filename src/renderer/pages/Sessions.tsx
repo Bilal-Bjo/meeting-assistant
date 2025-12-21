@@ -323,7 +323,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
                     <span style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: '#71717a',
+                      color: '#a1a1aa',
                       textTransform: 'uppercase',
                       letterSpacing: '0.08em'
                     }}>
@@ -549,11 +549,11 @@ function SessionCard({ session, onClick, onDelete, isLast, isProcessing }: Sessi
           {displayTitle}
         </span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#71717a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#a1a1aa' }}>
           <span>{relativeTime}</span>
           {hasRecording && (
             <>
-              <span style={{ color: '#52525b' }}>·</span>
+              <span style={{ color: '#71717a' }}>·</span>
               <span>{formatDuration(duration)}</span>
             </>
           )}

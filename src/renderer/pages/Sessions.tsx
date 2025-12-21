@@ -97,26 +97,26 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
       exit={{ opacity: 0 }}
       style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616', position: 'relative', overflow: 'hidden' }}
     >
-      {/* Ambient blue glows - subtle */}
+      {/* Ambient blue glows */}
       <div style={{
         position: 'absolute',
-        top: '-20%',
-        left: '-20%',
-        width: 600,
-        height: 600,
-        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.12) 0%, transparent 60%)',
-        filter: 'blur(100px)',
+        top: '-15%',
+        left: '-10%',
+        width: 500,
+        height: 500,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.15) 0%, transparent 70%)',
+        filter: 'blur(80px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
       <div style={{
         position: 'absolute',
-        bottom: '-20%',
-        right: '-20%',
-        width: 500,
-        height: 500,
-        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.1) 0%, transparent 60%)',
-        filter: 'blur(100px)',
+        bottom: '-10%',
+        right: '-5%',
+        width: 400,
+        height: 400,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.12) 0%, transparent 70%)',
+        filter: 'blur(80px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />

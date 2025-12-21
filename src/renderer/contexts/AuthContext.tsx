@@ -22,30 +22,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    
-    if (error) {
-      console.error('Error fetching profile:', error)
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching profile:', error)
+        // Don't block auth if profile fetch fails - just use null profile
+        return null
+      }
+      return data as UserProfile
+    } catch (err) {
+      console.error('Exception fetching profile:', err)
       return null
     }
-    return data as UserProfile
   }, [])
 
   useEffect(() => {
+    let mounted = true
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
+      
       setSession(session)
       setUser(session?.user ?? null)
+      
       if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile)
+        fetchProfile(session.user.id).then((prof) => {
+          if (mounted) setProfile(prof)
+        }).catch((err) => {
+          console.error('Profile fetch failed:', err)
+        }).finally(() => {
+          if (mounted) setLoading(false)
+        })
+      } else {
+        setLoading(false)
       }
-      setLoading(false)
+    }).catch((err) => {
+      console.error('Session check failed:', err)
+      if (mounted) setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return
+      
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -56,7 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [fetchProfile])
 
   const signIn = useCallback(async (email: string, password: string) => {

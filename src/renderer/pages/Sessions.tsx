@@ -100,23 +100,23 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
       {/* Ambient blue glows */}
       <div style={{
         position: 'absolute',
-        top: '-15%',
-        left: '-10%',
-        width: 500,
-        height: 500,
-        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.15) 0%, transparent 70%)',
-        filter: 'blur(80px)',
+        top: '5%',
+        left: '10%',
+        width: 450,
+        height: 450,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.25) 0%, rgba(91, 127, 255, 0.08) 50%, transparent 70%)',
+        filter: 'blur(60px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
       <div style={{
         position: 'absolute',
-        bottom: '-10%',
-        right: '-5%',
+        bottom: '10%',
+        right: '5%',
         width: 400,
         height: 400,
-        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.12) 0%, transparent 70%)',
-        filter: 'blur(80px)',
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.2) 0%, rgba(59, 91, 219, 0.06) 50%, transparent 70%)',
+        filter: 'blur(60px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />

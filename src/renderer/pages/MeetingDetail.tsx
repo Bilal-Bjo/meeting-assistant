@@ -139,9 +139,35 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: '#161616'
+        background: '#161616',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      {/* Ambient blue glows */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '-15%',
+        width: 600,
+        height: 600,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.12) 0%, rgba(91, 127, 255, 0.04) 30%, transparent 70%)',
+        filter: 'blur(80px)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-15%',
+        right: '-10%',
+        width: 500,
+        height: 500,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.1) 0%, rgba(59, 91, 219, 0.03) 30%, transparent 70%)',
+        filter: 'blur(70px)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+
       <header style={{
         height: 48,
         display: 'flex',
@@ -149,7 +175,9 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
         padding: '0 16px',
         paddingLeft: 80,
         borderBottom: '1px solid rgba(39, 39, 42, 0.5)',
-        WebkitAppRegion: 'drag'
+        WebkitAppRegion: 'drag',
+        position: 'relative',
+        zIndex: 1,
       } as React.CSSProperties}>
         <button
           onClick={onClose}
@@ -171,7 +199,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
         </button>
       </header>
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', position: 'relative', zIndex: 1 }}>
         <div style={{ maxWidth: 896, margin: '0 auto', padding: '32px 24px' }}>
           <div style={{ color: '#71717a', fontSize: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
             <span>{formatDate(session.created_at)}</span>

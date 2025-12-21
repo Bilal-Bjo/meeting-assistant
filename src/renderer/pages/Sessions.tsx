@@ -97,26 +97,26 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
       exit={{ opacity: 0 }}
       style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#161616', position: 'relative', overflow: 'hidden' }}
     >
-      {/* Ambient blue glows */}
+      {/* Ambient blue glows - subtle */}
       <div style={{
         position: 'absolute',
-        top: '-10%',
-        left: '-15%',
-        width: 700,
-        height: 700,
-        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.25) 0%, rgba(91, 127, 255, 0.1) 30%, transparent 70%)',
+        top: '-20%',
+        left: '-20%',
+        width: 600,
+        height: 600,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.12) 0%, transparent 60%)',
         filter: 'blur(100px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
       <div style={{
         position: 'absolute',
-        bottom: '-15%',
-        right: '-10%',
-        width: 600,
-        height: 600,
-        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.2) 0%, rgba(59, 91, 219, 0.08) 30%, transparent 70%)',
-        filter: 'blur(90px)',
+        bottom: '-20%',
+        right: '-20%',
+        width: 500,
+        height: 500,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.1) 0%, transparent 60%)',
+        filter: 'blur(100px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
@@ -271,7 +271,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
         <div>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
-              <div style={{ color: '#404040', fontSize: 13 }}>Loading...</div>
+              <div style={{ color: '#71717a', fontSize: 13 }}>Loading...</div>
             </div>
           ) : sessions.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', textAlign: 'center' }}>
@@ -288,7 +288,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
                 <Video style={{ width: 22, height: 22, color: '#5b7fff' }} />
               </div>
               <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', margin: '0 0 4px 0' }}>No meetings yet</h2>
-              <p style={{ fontSize: 13, color: '#404040', margin: '0 0 20px 0', maxWidth: 240, lineHeight: 1.5 }}>
+              <p style={{ fontSize: 13, color: '#71717a', margin: '0 0 20px 0', maxWidth: 240, lineHeight: 1.5 }}>
                 Start recording your meetings to get transcripts, summaries, and action items.
               </p>
               <button
@@ -323,7 +323,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
                     <span style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: '#404040',
+                      color: '#71717a',
                       textTransform: 'uppercase',
                       letterSpacing: '0.08em'
                     }}>
@@ -549,16 +549,16 @@ function SessionCard({ session, onClick, onDelete, isLast, isProcessing }: Sessi
           {displayTitle}
         </span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#404040' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#71717a' }}>
           <span>{relativeTime}</span>
           {hasRecording && (
             <>
-              <span style={{ color: '#262626' }}>·</span>
+              <span style={{ color: '#52525b' }}>·</span>
               <span>{formatDuration(duration)}</span>
             </>
           )}
           {!hasRecording && (
-            <span style={{ color: '#333' }}>· No recording</span>
+            <span style={{ color: '#ef4444', opacity: 0.7 }}>· No recording</span>
           )}
         </div>
       </div>
@@ -604,7 +604,7 @@ function SessionCard({ session, onClick, onDelete, isLast, isProcessing }: Sessi
             border: 'none',
             borderRadius: 6,
             cursor: 'pointer',
-            color: '#404040'
+            color: '#71717a'
           }}
           title="Delete"
         >
@@ -616,7 +616,7 @@ function SessionCard({ session, onClick, onDelete, isLast, isProcessing }: Sessi
         style={{ 
           width: 14, 
           height: 14, 
-          color: hovered ? '#525252' : '#262626',
+          color: hovered ? '#a1a1aa' : '#52525b',
           transition: 'color 0.1s ease',
           flexShrink: 0
         }} 

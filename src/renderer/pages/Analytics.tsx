@@ -44,23 +44,23 @@ export function Analytics({ onClose }: Props) {
       {/* Ambient blue glows */}
       <div style={{
         position: 'absolute',
-        top: '-10%',
-        left: '-15%',
-        width: 700,
-        height: 700,
-        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.25) 0%, rgba(91, 127, 255, 0.1) 30%, transparent 70%)',
-        filter: 'blur(100px)',
+        top: '5%',
+        left: '10%',
+        width: 450,
+        height: 450,
+        background: 'radial-gradient(circle, rgba(91, 127, 255, 0.25) 0%, rgba(91, 127, 255, 0.08) 50%, transparent 70%)',
+        filter: 'blur(60px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
       <div style={{
         position: 'absolute',
-        bottom: '-15%',
-        right: '-10%',
-        width: 600,
-        height: 600,
-        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.2) 0%, rgba(59, 91, 219, 0.08) 30%, transparent 70%)',
-        filter: 'blur(90px)',
+        bottom: '10%',
+        right: '5%',
+        width: 400,
+        height: 400,
+        background: 'radial-gradient(circle, rgba(59, 91, 219, 0.2) 0%, rgba(59, 91, 219, 0.06) 50%, transparent 70%)',
+        filter: 'blur(60px)',
         pointerEvents: 'none',
         zIndex: 0,
       }} />
@@ -98,16 +98,16 @@ export function Analytics({ onClose }: Props) {
       <main style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
-            <div style={{ color: '#404040', fontSize: 13 }}>Loading...</div>
+            <div style={{ color: '#71717a', fontSize: 13 }}>Loading...</div>
           </div>
         ) : sessions.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', textAlign: 'center' }}>
-            <TrendingUp style={{ width: 32, height: 32, color: '#333', marginBottom: 16 }} />
-            <p style={{ fontSize: 14, color: '#404040' }}>No data yet. Complete some meetings to see analytics.</p>
+            <TrendingUp style={{ width: 32, height: 32, color: '#52525b', marginBottom: 16 }} />
+            <p style={{ fontSize: 14, color: '#71717a' }}>No data yet. Complete some meetings to see analytics.</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 900 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
               <StatCard
                 icon={<Video style={{ width: 18, height: 18 }} />}
                 label="Total Meetings"
@@ -154,12 +154,12 @@ export function Analytics({ onClose }: Props) {
                     dataKey="label" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: '#404040', fontSize: 11 }}
+                    tick={{ fill: '#71717a', fontSize: 11 }}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: '#404040', fontSize: 11 }}
+                    tick={{ fill: '#71717a', fontSize: 11 }}
                     allowDecimals={false}
                   />
                   <Tooltip 
@@ -189,12 +189,12 @@ export function Analytics({ onClose }: Props) {
                     dataKey="day" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: '#404040', fontSize: 11 }}
+                    tick={{ fill: '#71717a', fontSize: 11 }}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: '#404040', fontSize: 11 }}
+                    tick={{ fill: '#71717a', fontSize: 11 }}
                     allowDecimals={false}
                   />
                   <Tooltip 
@@ -241,7 +241,7 @@ function StatCard({ icon, label, value, subValue, trend, valueColor }: StatCardP
         {value}
       </div>
       {subValue && (
-        <div style={{ fontSize: 12, color: '#404040' }}>
+        <div style={{ fontSize: 12, color: '#71717a' }}>
           {subValue}
         </div>
       )}

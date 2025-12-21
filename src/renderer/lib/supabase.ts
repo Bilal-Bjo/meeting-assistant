@@ -3,11 +3,30 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = 'https://vdebprdvwpgruiuuxxci.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkZWJwcmR2d3BncnVpdXV4eGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyODAzMjUsImV4cCI6MjA4MTg1NjMyNX0.NiBX7MKa7GEwoGp3YLH88O_m3zl7PPDDJKHHDwjZVfc'
 
+// Custom storage adapter for Electron
+const electronStorage = {
+  getItem: (key: string) => {
+    const value = localStorage.getItem(key)
+    console.log('[Supabase Storage] getItem:', key, value ? 'found' : 'not found')
+    return value
+  },
+  setItem: (key: string, value: string) => {
+    console.log('[Supabase Storage] setItem:', key)
+    localStorage.setItem(key, value)
+  },
+  removeItem: (key: string) => {
+    console.log('[Supabase Storage] removeItem:', key)
+    localStorage.removeItem(key)
+  },
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
+    storage: electronStorage,
+    storageKey: 'tldm-auth',
   },
 })
 
@@ -19,4 +38,5 @@ export type UserProfile = {
   created_at: string
   updated_at: string
 }
+
 

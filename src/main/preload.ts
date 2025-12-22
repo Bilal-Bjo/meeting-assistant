@@ -17,6 +17,11 @@ const IPC_CHANNELS = {
   GET_PLATFORM: 'system:get-platform',
   GET_DESKTOP_SOURCES: 'system:get-desktop-sources',
   GET_MACOS_VERSION: 'system:get-macos-version',
+  GET_APP_VERSION: 'system:get-app-version',
+  GET_UPDATE_STATUS: 'system:get-update-status',
+  CHECK_FOR_UPDATES: 'system:check-for-updates',
+  INSTALL_UPDATE: 'system:install-update',
+  UPDATE_AVAILABLE: 'system:update-available',
   AUDIO_GET_DEVICES: 'audio:get-devices',
   AUDIO_START_CAPTURE: 'audio:start-capture',
   AUDIO_STOP_CAPTURE: 'audio:stop-capture',
@@ -32,7 +37,10 @@ const IPC_CHANNELS = {
   CALL_END: 'call:end',
   CALL_IMPORT_TRANSCRIPT: 'call:import-transcript',
   CALL_FINALIZE_STATUS: 'call:finalize-status',
+  POST_CALL_PROCESS: 'call:post-call-process',
+  POST_CALL_RESULT: 'call:post-call-result',
   MEETING_CHAT_SEND: 'meeting:chat-send',
+  MEETING_CHAT_SEND_WITH_CONTEXT: 'meeting:chat-send-with-context',
   MEETING_CHAT_DELTA: 'meeting:chat-delta',
   MEETING_CHAT_RESPONSE: 'meeting:chat-response',
 } as const
@@ -59,6 +67,15 @@ const api = {
     getPlatform: () => ipcRenderer.invoke(IPC_CHANNELS.GET_PLATFORM),
     getDesktopSources: () => ipcRenderer.invoke(IPC_CHANNELS.GET_DESKTOP_SOURCES),
     getMacOSVersion: () => ipcRenderer.invoke(IPC_CHANNELS.GET_MACOS_VERSION),
+    getAppVersion: () => ipcRenderer.invoke(IPC_CHANNELS.GET_APP_VERSION),
+    getUpdateStatus: () => ipcRenderer.invoke(IPC_CHANNELS.GET_UPDATE_STATUS),
+    checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.CHECK_FOR_UPDATES),
+    installUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.INSTALL_UPDATE),
+    onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => {
+      const handler = (_: unknown, info: { version: string; releaseNotes?: string }) => callback(info)
+      ipcRenderer.on(IPC_CHANNELS.UPDATE_AVAILABLE, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.UPDATE_AVAILABLE, handler)
+    },
   },
   audio: {
     getDevices: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO_GET_DEVICES),
@@ -93,16 +110,25 @@ const api = {
       ipcRenderer.on(IPC_CHANNELS.CALL_FINALIZE_STATUS, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CALL_FINALIZE_STATUS, handler)
     },
+    // New methods for Supabase flow
+    processPostCall: (meetingId: string, transcript: string) => ipcRenderer.invoke(IPC_CHANNELS.POST_CALL_PROCESS, meetingId, transcript),
+    onPostCallResult: (callback: (data: { meetingId: string; summary: unknown; actionItems: unknown; error?: string }) => void) => {
+      const handler = (_: unknown, data: { meetingId: string; summary: unknown; actionItems: unknown; error?: string }) => callback(data)
+      ipcRenderer.on(IPC_CHANNELS.POST_CALL_RESULT, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.POST_CALL_RESULT, handler)
+    },
   },
   meetingChat: {
     send: (sessionId: string, message: string) => ipcRenderer.invoke(IPC_CHANNELS.MEETING_CHAT_SEND, sessionId, message),
-    onDelta: (callback: (data: { sessionId: string; text: string }) => void) => {
-      const handler = (_: unknown, data: { sessionId: string; text: string }) => callback(data)
+    sendWithContext: (meetingId: string, message: string, context: { transcript?: string; summary?: unknown; actionItems?: unknown; chatHistory: Array<{ role: string; content: string }> }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEETING_CHAT_SEND_WITH_CONTEXT, meetingId, message, context),
+    onDelta: (callback: (data: { meetingId: string; text: string }) => void) => {
+      const handler = (_: unknown, data: { meetingId: string; text: string }) => callback(data)
       ipcRenderer.on(IPC_CHANNELS.MEETING_CHAT_DELTA, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.MEETING_CHAT_DELTA, handler)
     },
-    onResponse: (callback: (data: { sessionId: string; text: string; error?: string }) => void) => {
-      const handler = (_: unknown, data: { sessionId: string; text: string; error?: string }) => callback(data)
+    onResponse: (callback: (data: { meetingId: string; text: string; error?: string }) => void) => {
+      const handler = (_: unknown, data: { meetingId: string; text: string; error?: string }) => callback(data)
       ipcRenderer.on(IPC_CHANNELS.MEETING_CHAT_RESPONSE, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.MEETING_CHAT_RESPONSE, handler)
     },

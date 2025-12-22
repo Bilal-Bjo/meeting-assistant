@@ -1,19 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, CheckCircle2, Circle, Clock, AlertCircle, MessageSquare, Send, User, Bot } from 'lucide-react'
-import type { Session, TranscriptSegment, MeetingChat, ActionItem } from '@shared/types'
+import { meetingsDb, type DbMeeting, type DbMeetingSegment, type DbMeetingChat, type ActionItem } from '../lib/supabase'
 
 interface Props {
-  sessionId: string
+  meetingId: string
   onClose: () => void
 }
 
 type Tab = 'summary' | 'transcript' | 'actions' | 'chat'
 
-export function MeetingDetail({ sessionId, onClose }: Props) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [segments, setSegments] = useState<TranscriptSegment[]>([])
-  const [chats, setChats] = useState<MeetingChat[]>([])
+export function MeetingDetail({ meetingId, onClose }: Props) {
+  const [meeting, setMeeting] = useState<DbMeeting | null>(null)
+  const [segments, setSegments] = useState<DbMeetingSegment[]>([])
+  const [chats, setChats] = useState<DbMeetingChat[]>([])
   const [activeTab, setActiveTab] = useState<Tab>('summary')
   const [loading, setLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
@@ -24,16 +24,16 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [loadedSession, loadedSegments, loadedChats] = await Promise.all([
-      window.api.db.getSession(sessionId),
-      window.api.db.getTranscriptSegments(sessionId),
-      window.api.db.getMeetingChats(sessionId),
+    const [loadedMeeting, loadedSegments, loadedChats] = await Promise.all([
+      meetingsDb.get(meetingId),
+      meetingsDb.getSegments(meetingId),
+      meetingsDb.getChats(meetingId),
     ])
-    setSession(loadedSession)
+    setMeeting(loadedMeeting)
     setSegments(loadedSegments)
     setChats(loadedChats)
     setLoading(false)
-  }, [sessionId])
+  }, [meetingId])
 
   useEffect(() => {
     loadData()
@@ -42,17 +42,23 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
 
   useEffect(() => {
     const unsubDelta = window.api.meetingChat.onDelta((data) => {
-      if (data.sessionId === sessionId) {
+      if (data.meetingId === meetingId) {
         setStreamingText(prev => prev + data.text)
       }
     })
 
     const unsubResponse = window.api.meetingChat.onResponse(async (data) => {
-      if (data.sessionId === sessionId) {
+      if (data.meetingId === meetingId) {
         setChatLoading(false)
         setStreamingText('')
-        if (!data.error) {
-          const loadedChats = await window.api.db.getMeetingChats(sessionId)
+        if (!data.error && data.text) {
+          // Save assistant response to Supabase
+          await meetingsDb.addChat({
+            meeting_id: meetingId,
+            role: 'assistant',
+            content: data.text,
+          })
+          const loadedChats = await meetingsDb.getChats(meetingId)
           setChats(loadedChats)
         }
       }
@@ -62,31 +68,48 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
       unsubDelta()
       unsubResponse()
     }
-  }, [sessionId])
+  }, [meetingId])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chats, streamingText])
 
   const handleSendChat = async () => {
-    if (!chatInput.trim() || chatLoading) return
+    if (!chatInput.trim() || chatLoading || !meeting) return
     const message = chatInput.trim()
     setChatInput('')
     setChatLoading(true)
     setStreamingText('')
-    await window.api.meetingChat.send(sessionId, message)
+
+    // Save user message to Supabase first
+    await meetingsDb.addChat({
+      meeting_id: meetingId,
+      role: 'user',
+      content: message,
+    })
+    // Refresh chats to show the user message
+    const updatedChats = await meetingsDb.getChats(meetingId)
+    setChats(updatedChats)
+
+    // Send with context (main process has OpenAI key, but renderer has meeting data)
+    await window.api.meetingChat.sendWithContext(meetingId, message, {
+      transcript: meeting.merged_transcript || undefined,
+      summary: meeting.summary || undefined,
+      actionItems: meeting.action_items || undefined,
+      chatHistory: chats.map(c => ({ role: c.role, content: c.content })),
+    })
   }
 
   const handleToggleActionItem = async (index: number) => {
-    if (!session?.action_items) return
-    const updatedItems = [...(session.action_items.action_items || [])]
+    if (!meeting?.action_items) return
+    const updatedItems = [...(meeting.action_items.action_items || [])]
     updatedItems[index] = { ...updatedItems[index], completed: !updatedItems[index].completed }
-    const updatedActionItems = { ...session.action_items, action_items: updatedItems }
-    await window.api.db.setActionItems(sessionId, updatedActionItems)
-    setSession({ ...session, action_items: updatedActionItems })
+    const updatedActionItems = { ...meeting.action_items, action_items: updatedItems }
+    await meetingsDb.update(meetingId, { action_items: updatedActionItems })
+    setMeeting({ ...meeting, action_items: updatedActionItems })
   }
 
-  if (loading || !session) {
+  if (loading || !meeting) {
     return (
       <div style={{
         height: '100%',
@@ -114,9 +137,9 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
     return `${mins} min`
   }
 
-  const actionItems = session.action_items?.action_items || []
-  const followUps = session.action_items?.follow_ups || []
-  const openQuestions = session.action_items?.open_questions || []
+  const actionItems = meeting.action_items?.action_items || []
+  const followUps = meeting.action_items?.follow_ups || []
+  const openQuestions = meeting.action_items?.open_questions || []
   const hasAnyActions = actionItems.length > 0 || followUps.length > 0 || openQuestions.length > 0
 
   const availableTabs: Tab[] = hasAnyActions 
@@ -204,11 +227,11 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
       <div style={{ flex: 1, overflowY: 'auto', position: 'relative', zIndex: 1 }}>
         <div style={{ maxWidth: 896, margin: '0 auto', padding: '32px 24px' }}>
           <div style={{ color: '#71717a', fontSize: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span>{formatDate(session.created_at)}</span>
-            {session.duration_sec > 0 && (
+            <span>{formatDate(meeting.created_at)}</span>
+            {meeting.duration_sec > 0 && (
               <>
                 <span style={{ color: '#3f3f46' }}>•</span>
-                <span>{formatDuration(session.duration_sec)}</span>
+                <span>{formatDuration(meeting.duration_sec)}</span>
               </>
             )}
           </div>
@@ -220,7 +243,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
             margin: '0 0 24px 0',
             lineHeight: 1.2
           }}>
-            {session.title}
+            {meeting.title}
           </h1>
 
           <div style={{
@@ -265,20 +288,20 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
           >
             {activeTab === 'summary' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-                {session.summary?.summary && (
+                {meeting.summary?.summary && (
                   <section>
                     <h2 style={{ fontSize: 20, fontWeight: 600, color: 'white', margin: '0 0 16px 0' }}>Overview</h2>
                     <p style={{ fontSize: 15, lineHeight: 1.7, color: '#d4d4d8', margin: 0 }}>
-                      {session.summary.summary}
+                      {meeting.summary.summary}
                     </p>
                   </section>
                 )}
 
-                {session.summary?.decisions?.length ? (
+                {meeting.summary?.decisions?.length ? (
                   <section>
                     <h2 style={{ fontSize: 20, fontWeight: 600, color: 'white', margin: '0 0 16px 0' }}>Decisions Made</h2>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {session.summary.decisions.map((decision, i) => (
+                      {meeting.summary.decisions.map((decision, i) => (
                         <li key={i} style={{ display: 'flex', gap: 12, fontSize: 15, color: '#d4d4d8', lineHeight: 1.6 }}>
                           <CheckCircle2 size={18} style={{ color: '#22c55e', marginTop: 2, flexShrink: 0 }} />
                           <span>{decision}</span>
@@ -288,11 +311,11 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
                   </section>
                 ) : null}
 
-                {session.summary?.key_points?.length ? (
+                {meeting.summary?.key_points?.length ? (
                   <section>
                     <h2 style={{ fontSize: 20, fontWeight: 600, color: 'white', margin: '0 0 16px 0' }}>Key Discussion Points</h2>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {session.summary.key_points.map((point, i) => (
+                      {meeting.summary.key_points.map((point, i) => (
                         <li key={i} style={{ display: 'flex', gap: 12, fontSize: 15, color: '#d4d4d8', lineHeight: 1.6 }}>
                           <span style={{ color: '#5b7fff', marginTop: 6 }}>•</span>
                           <span>{point}</span>
@@ -302,11 +325,11 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
                   </section>
                 ) : null}
 
-                {session.summary?.participants_mentioned?.length ? (
+                {meeting.summary?.participants_mentioned?.length ? (
                   <section>
                     <h2 style={{ fontSize: 20, fontWeight: 600, color: 'white', margin: '0 0 16px 0' }}>Participants</h2>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {session.summary.participants_mentioned.map((name, i) => (
+                      {meeting.summary.participants_mentioned.map((name, i) => (
                         <span key={i} style={{
                           padding: '6px 12px',
                           background: '#27272a',
@@ -321,7 +344,7 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
                   </section>
                 ) : null}
 
-                {!session.summary && (
+                {!meeting.summary && (
                   <div style={{ textAlign: 'center', padding: '64px 0' }}>
                     <p style={{ color: '#71717a', fontSize: 14 }}>Summary is being generated...</p>
                   </div>
@@ -342,9 +365,9 @@ export function MeetingDetail({ sessionId, onClose }: Props) {
                       </div>
                     ))}
                   </div>
-                ) : session.merged_transcript ? (
+                ) : meeting.merged_transcript ? (
                   <pre style={{ fontSize: 15, lineHeight: 1.6, color: '#d4d4d8', whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>
-                    {session.merged_transcript}
+                    {meeting.merged_transcript}
                   </pre>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '64px 0' }}>

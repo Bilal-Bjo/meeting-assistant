@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { PhoneOff, Mic, MicOff, Circle } from 'lucide-react'
-import type { Session, RealtimeEvent, Settings as SettingsType } from '@shared/types'
+import { meetingsDb, settingsDb, type DbMeeting, type DbMeetingSegment } from '../lib/supabase'
+import type { RealtimeEvent } from '@shared/types'
 
 interface Props {
-  session: Session
+  meeting: DbMeeting
   onEndCall: () => void
 }
 
-export function InCall({ session, onEndCall }: Props) {
+export function InCall({ meeting, onEndCall }: Props) {
   const [isMuted, setIsMuted] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [statusText, setStatusText] = useState('Starting…')
@@ -16,7 +17,8 @@ export function InCall({ session, onEndCall }: Props) {
   const [duration, setDuration] = useState(0)
   const [segmentCount, setSegmentCount] = useState(0)
   const [platform, setPlatform] = useState<string>('darwin')
-  
+  const [irlMode, setIrlMode] = useState(false)
+
   const startTimeRef = useRef(Date.now())
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const systemStreamRef = useRef<MediaStream | null>(null)
@@ -24,7 +26,7 @@ export function InCall({ session, onEndCall }: Props) {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const systemWorkletNodeRef = useRef<AudioWorkletNode | null>(null)
   const mutedRef = useRef(false)
-  const settingsRef = useRef<SettingsType | null>(null)
+  const segmentsRef = useRef<Omit<DbMeetingSegment, 'id'>[]>([])
 
   useEffect(() => {
     window.api.system.getPlatform().then(setPlatform)
@@ -35,18 +37,26 @@ export function InCall({ session, onEndCall }: Props) {
   }, [])
 
   useEffect(() => {
-    const unsubscribe = window.api.realtime.onEvent((event: RealtimeEvent) => {
+    const unsubscribe = window.api.realtime.onEvent(async (event: RealtimeEvent) => {
       if (event.type === 'transcript' && event.text && event.speaker) {
         const now = Date.now()
         const startMs = Math.max(0, now - startTimeRef.current)
-        window.api.db.addTranscriptSegment({
-          session_id: session.id,
-          speaker: event.speaker,
+        const segment: Omit<DbMeetingSegment, 'id'> = {
+          meeting_id: meeting.id,
+          speaker: event.speaker === 'you' ? 'you' : 'participant',
           text: event.text,
           start_ms: startMs,
           end_ms: startMs,
-        })
-        setSegmentCount(c => c + 1)
+        }
+
+        // Save to Supabase
+        try {
+          await meetingsDb.addSegment(segment)
+          segmentsRef.current.push(segment)
+          setSegmentCount(c => c + 1)
+        } catch (err) {
+          console.error('Failed to save segment:', err)
+        }
       } else if (event.type === 'connected') {
         setIsConnected(true)
         setStatusText('Recording')
@@ -63,21 +73,21 @@ export function InCall({ session, onEndCall }: Props) {
 
     setStatusText('Starting audio…')
     void (async () => {
-      settingsRef.current = await window.api.settings.get()
-      await startMicCapture(session.id)
+      const settings = await settingsDb.get()
+      setIrlMode(false) // IRL mode not in Supabase settings yet
+      await startMicCapture(meeting.id, settings)
     })()
 
     return () => {
       unsubscribe()
       stopMicCapture()
     }
-  }, [session.id])
+  }, [meeting.id])
 
-  async function startMicCapture(sessionId: string): Promise<void> {
+  async function startMicCapture(meetingId: string, settings: Awaited<ReturnType<typeof settingsDb.get>>): Promise<void> {
     try {
-      const settings = settingsRef.current
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: settings?.mic_device_id ? { deviceId: { exact: settings.mic_device_id } } : true,
+        audio: true,
       })
       mediaStreamRef.current = stream
       const ctx = new AudioContext({ sampleRate: 24000 })
@@ -130,59 +140,45 @@ registerProcessor('pcm-processor', PCMProcessor)
       workletNodeRef.current = workletNode
       workletNode.port.onmessage = (e) => {
         if (mutedRef.current) return
-        window.api.realtime.sendMicAudioPcm16(sessionId, e.data.pcm16)
+        window.api.realtime.sendMicAudioPcm16(meetingId, e.data.pcm16)
       }
       source.connect(workletNode)
       workletNode.connect(ctx.destination)
 
-      if (!settings?.irl_mode) {
-        await setupSystemAudio(sessionId, ctx, settings)
+      if (!irlMode) {
+        await setupSystemAudio(meetingId, ctx)
       }
 
       setStatusText('Connecting…')
-      await window.api.realtime.connect(sessionId)
     } catch (err) {
       setErrorText((err as Error).message)
     }
   }
 
-  async function setupSystemAudio(sessionId: string, ctx: AudioContext, settings: SettingsType | null): Promise<void> {
+  async function setupSystemAudio(meetingId: string, ctx: AudioContext): Promise<void> {
     const platform = await window.api.system.getPlatform()
     const macVersion = await window.api.system.getMacOSVersion()
-    
+
     try {
-      if (platform === 'win32' && settings?.desktop_source_id) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const stream = await (navigator.mediaDevices as any).getUserMedia({
-          audio: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: settings.desktop_source_id } },
-          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: settings.desktop_source_id, maxWidth: 1, maxHeight: 1, maxFrameRate: 1 } }
-        })
-        for (const t of stream.getVideoTracks()) t.stop()
-        systemStreamRef.current = stream
-        connectSystemWorklet(sessionId, ctx, stream)
-      } else if (platform === 'darwin' && macVersion && macVersion.major >= 13) {
+      if (platform === 'darwin' && macVersion && macVersion.major >= 13) {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
         for (const t of stream.getVideoTracks()) t.stop()
         if (stream.getAudioTracks().length > 0) {
           systemStreamRef.current = stream
-          connectSystemWorklet(sessionId, ctx, stream)
+          connectSystemWorklet(meetingId, ctx, stream)
         }
-      } else if (settings?.system_audio_device_id) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: settings.system_audio_device_id } } })
-        systemStreamRef.current = stream
-        connectSystemWorklet(sessionId, ctx, stream)
       }
     } catch (e) {
       console.warn('[system-audio] Failed:', e)
     }
   }
 
-  function connectSystemWorklet(sessionId: string, ctx: AudioContext, stream: MediaStream): void {
+  function connectSystemWorklet(meetingId: string, ctx: AudioContext, stream: MediaStream): void {
     const source = ctx.createMediaStreamSource(stream)
     const node = new AudioWorkletNode(ctx, 'pcm-processor')
     systemWorkletNodeRef.current = node
     node.port.onmessage = (e) => {
-      window.api.realtime.sendSystemAudioPcm16(sessionId, e.data.pcm16)
+      window.api.realtime.sendSystemAudioPcm16(meetingId, e.data.pcm16)
     }
     source.connect(node)
     node.connect(ctx.destination)
@@ -194,13 +190,40 @@ registerProcessor('pcm-processor', PCMProcessor)
     audioContextRef.current?.close()
     mediaStreamRef.current?.getTracks().forEach(t => t.stop())
     systemStreamRef.current?.getTracks().forEach(t => t.stop())
-    window.api.realtime.disconnect()
   }
 
   const handleMuteToggle = useCallback(() => {
     setIsMuted(m => { mutedRef.current = !m; return !m })
     window.api.audio.setMicMuted(!isMuted)
   }, [isMuted])
+
+  const handleEndCall = useCallback(async () => {
+    // Update meeting duration
+    const durationSec = Math.floor((Date.now() - startTimeRef.current) / 1000)
+    let transcript = ''
+
+    try {
+      await meetingsDb.update(meeting.id, { duration_sec: durationSec })
+
+      // Build merged transcript
+      if (segmentsRef.current.length > 0) {
+        transcript = segmentsRef.current
+          .sort((a, b) => a.start_ms - b.start_ms)
+          .map(s => `${s.speaker === 'you' ? 'You' : 'Participant'}: ${s.text}`)
+          .join('\n')
+        await meetingsDb.update(meeting.id, { merged_transcript: transcript })
+      }
+    } catch (err) {
+      console.error('Failed to update meeting:', err)
+    }
+
+    // Trigger post-call processing (summary generation)
+    if (transcript) {
+      window.api.call.processPostCall(meeting.id, transcript)
+    }
+
+    onEndCall()
+  }, [meeting.id, onEndCall])
 
   const formatDuration = (s: number) => {
     const hrs = Math.floor(s / 3600)
@@ -261,7 +284,7 @@ registerProcessor('pcm-processor', PCMProcessor)
             {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
             {isMuted ? 'Unmute' : 'Mute'}
           </button>
-          <button onClick={onEndCall} style={{ height: 36, padding: '0 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={handleEndCall} style={{ height: 36, padding: '0 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
             <PhoneOff size={16} />
             End
           </button>
@@ -270,7 +293,7 @@ registerProcessor('pcm-processor', PCMProcessor)
 
       {/* Main content - Recording indicator */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
-        
+
         {/* Big recording indicator */}
         <motion.div
           animate={isConnected ? { scale: [1, 1.1, 1], opacity: [1, 0.7, 1] } : {}}
@@ -300,15 +323,15 @@ registerProcessor('pcm-processor', PCMProcessor)
         </div>
 
         {/* Mode indicator */}
-        <div style={{ 
-          padding: '8px 16px', 
-          background: '#18181b', 
-          borderRadius: 8, 
+        <div style={{
+          padding: '8px 16px',
+          background: '#18181b',
+          borderRadius: 8,
           border: '1px solid #27272a',
           color: '#a1a1aa',
           fontSize: 13
         }}>
-          {settingsRef.current?.irl_mode ? '🎤 In-person meeting (mic only)' : '💻 Online meeting (mic + system audio)'}
+          {irlMode ? '🎤 In-person meeting (mic only)' : '💻 Online meeting (mic + system audio)'}
         </div>
       </div>
 

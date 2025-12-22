@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Volume2, Cpu, Monitor, X, User, LogOut } from 'lucide-react'
+import { ArrowLeft, Volume2, Cpu, Monitor, X, User, LogOut, Loader2 } from 'lucide-react'
 import type { Settings as SettingsType } from '@shared/types'
 import type { DesktopSource } from '@shared/ipc'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
   onClose: () => void
+  initialTab?: string
 }
 
-type Tab = 'audio' | 'ai' | 'account'
+type Tab = 'account' | 'audio' | 'ai'
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'account', label: 'Account', icon: <User style={{ width: 18, height: 18 }} /> },
   { id: 'audio', label: 'Audio', icon: <Volume2 style={{ width: 18, height: 18 }} /> },
   { id: 'ai', label: 'AI Models', icon: <Cpu style={{ width: 18, height: 18 }} /> },
-  { id: 'account', label: 'Account', icon: <User style={{ width: 18, height: 18 }} /> },
 ]
 
 function MacOSAudioSection({ 
@@ -144,9 +145,9 @@ function MacOSAudioSection({
   )
 }
 
-export function Settings({ onClose }: Props) {
+export function Settings({ onClose, initialTab }: Props) {
   const { user, profile, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState<Tab>('audio')
+  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'account')
   const [settings, setSettings] = useState<SettingsType | null>(null)
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
   const [platform, setPlatform] = useState<string>('darwin')
@@ -154,6 +155,9 @@ export function Settings({ onClose }: Props) {
   const [desktopSources, setDesktopSources] = useState<DesktopSource[]>([])
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [appVersion, setAppVersion] = useState<string>('')
+  const [updateStatus, setUpdateStatus] = useState<{ available: boolean; version?: string; downloading?: boolean; downloaded?: boolean; checking?: boolean; lastChecked?: number; error?: string; releaseNotes?: string }>({ available: false })
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -162,19 +166,37 @@ export function Settings({ onClose }: Props) {
 
   useEffect(() => {
     Promise.all([
-      window.api.settings.get(), 
+      window.api.settings.get(),
       loadAudioDevices(),
-      window.api.system.getPlatform()
+      window.api.system.getPlatform(),
+      window.api.system.getAppVersion(),
+      window.api.system.getUpdateStatus()
     ]).then(
-      ([loadedSettings, loadedDevices, loadedPlatform]) => {
+      ([loadedSettings, loadedDevices, loadedPlatform, version, update]) => {
         setSettings(loadedSettings)
         setDevices(loadedDevices)
         setPlatform(loadedPlatform)
+        setAppVersion(version)
+        setUpdateStatus(update)
         if (loadedSettings.desktop_source_id) {
           setSelectedSourceId(loadedSettings.desktop_source_id)
         }
       }
     )
+
+    const unsubscribe = window.api.system.onUpdateAvailable((info) => {
+      setUpdateStatus(prev => ({ ...prev, available: true, version: info.version, downloading: true, downloaded: false, checking: false }))
+    })
+
+    const pollInterval = setInterval(async () => {
+      const status = await window.api.system.getUpdateStatus()
+      setUpdateStatus(status)
+    }, 1000)
+
+    return () => {
+      unsubscribe()
+      clearInterval(pollInterval)
+    }
   }, [])
 
   async function loadAudioDevices(): Promise<{ id: string; name: string }[]> {
@@ -572,73 +594,212 @@ export function Settings({ onClose }: Props) {
 
             {activeTab === 'account' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* App Version & Updates */}
                 <div style={{
                   background: '#18181b',
                   border: '1px solid #27272a',
                   borderRadius: 12,
                   padding: 24
                 }}>
-                  <h2 style={{ fontSize: 18, fontWeight: 600, color: 'white', margin: '0 0 24px 0' }}>Profile</h2>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                    <div>
+                      <h2 style={{ fontSize: 18, fontWeight: 600, color: 'white', margin: 0 }}>Meeting Notes</h2>
+                      <p style={{ fontSize: 13, color: '#71717a', margin: '4px 0 0 0' }}>Version {appVersion}</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setIsCheckingUpdate(true)
+                        try {
+                          await window.api.system.checkForUpdates()
+                          let attempts = 0
+                          const maxAttempts = 10
+                          while (attempts < maxAttempts) {
+                            await new Promise(r => setTimeout(r, 500))
+                            const status = await window.api.system.getUpdateStatus()
+                            setUpdateStatus(status)
+                            if (!status.checking) break
+                            attempts++
+                          }
+                        } finally {
+                          setIsCheckingUpdate(false)
+                        }
+                      }}
+                      disabled={isCheckingUpdate || updateStatus.downloading}
+                      style={{
+                        padding: '8px 14px',
+                        background: 'transparent',
+                        color: '#a1a1aa',
+                        fontSize: 13,
+                        borderRadius: 8,
+                        border: '1px solid #3f3f46',
+                        cursor: isCheckingUpdate || updateStatus.downloading ? 'not-allowed' : 'pointer',
+                        opacity: isCheckingUpdate || updateStatus.downloading ? 0.5 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      {isCheckingUpdate && <Loader2 size={14} className="animate-spin" />}
+                      {isCheckingUpdate ? 'Checking...' : 'Check for updates'}
+                    </button>
+                  </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                  {/* Update available banner */}
+                  {updateStatus.available && (
                     <div style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 16,
+                      padding: 16,
+                      background: updateStatus.downloaded
+                        ? 'rgba(34, 197, 94, 0.1)'
+                        : 'rgba(91, 127, 255, 0.08)',
+                      borderRadius: 10,
+                      border: `1px solid ${updateStatus.downloaded
+                        ? 'rgba(34, 197, 94, 0.2)'
+                        : 'rgba(91, 127, 255, 0.2)'}`,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: updateStatus.releaseNotes ? 12 : 0 }}>
+                        <div>
+                          <p style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: updateStatus.downloaded ? '#4ade80' : '#5b7fff',
+                            margin: 0
+                          }}>
+                            {updateStatus.downloaded
+                              ? `v${updateStatus.version} ready to install`
+                              : updateStatus.downloading
+                                ? `Downloading v${updateStatus.version}...`
+                                : `v${updateStatus.version} available`}
+                          </p>
+                          {!updateStatus.downloaded && updateStatus.downloading && (
+                            <p style={{ fontSize: 12, color: '#71717a', margin: '4px 0 0 0' }}>
+                              The update will install when you restart the app
+                            </p>
+                          )}
+                        </div>
+                        {updateStatus.downloaded && (
+                          <button
+                            onClick={() => window.api.system.installUpdate()}
+                            style={{
+                              padding: '8px 16px',
+                              background: '#22c55e',
+                              color: 'white',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              borderRadius: 8,
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Install & Restart
+                          </button>
+                        )}
+                      </div>
+
+                      {updateStatus.releaseNotes && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: '#71717a', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            What's new
+                          </p>
+                          <div style={{ fontSize: 13, color: '#d4d4d8', lineHeight: 1.6 }}>
+                            {updateStatus.releaseNotes.split('\n').filter(line => line.trim().startsWith('-')).slice(0, 5).map((line, i) => (
+                              <p key={i} style={{ margin: '2px 0' }}>{line}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {updateStatus.error && (
+                    <div style={{
+                      padding: 12,
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      borderRadius: 8,
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                    }}>
+                      <p style={{ fontSize: 13, color: '#f87171', margin: 0 }}>
+                        {updateStatus.error}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Up to date state */}
+                  {!updateStatus.available && !updateStatus.error && (
+                    <p style={{ fontSize: 13, color: '#52525b', margin: 0 }}>
+                      {updateStatus.lastChecked
+                        ? `✓ You're on the latest version`
+                        : 'Check for updates to make sure you have the latest features'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Profile Section */}
+                <div style={{
+                  background: '#18181b',
+                  border: '1px solid #27272a',
+                  borderRadius: 12,
+                  padding: 24
+                }}>
+                  <h2 style={{ fontSize: 14, fontWeight: 600, color: '#71717a', margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Profile</h2>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
                       background: 'linear-gradient(135deg, #5b7fff 0%, #3b5bdb 100%)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 24,
+                      fontSize: 18,
                       fontWeight: 600,
-                      color: 'white'
+                      color: 'white',
+                      flexShrink: 0,
                     }}>
                       {(profile?.full_name || user?.email || '?')[0].toUpperCase()}
                     </div>
-                    <div>
-                      <p style={{ fontSize: 16, fontWeight: 600, color: 'white', margin: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 15, fontWeight: 600, color: 'white', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {profile?.full_name || 'User'}
                       </p>
-                      <p style={{ fontSize: 14, color: '#71717a', margin: '4px 0 0 0' }}>
+                      <p style={{ fontSize: 13, color: '#71717a', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {user?.email}
                       </p>
                     </div>
-                  </div>
-
-                  <div style={{ 
-                    padding: 16, 
-                    background: 'rgba(39, 39, 42, 0.5)', 
-                    borderRadius: 8,
-                    marginBottom: 16
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontSize: 13, color: '#71717a' }}>Member since</span>
-                      <span style={{ fontSize: 13, color: 'white' }}>
-                        {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
-                      </span>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p style={{ fontSize: 11, color: '#52525b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Member since</p>
+                      <p style={{ fontSize: 13, color: '#a1a1aa', margin: '2px 0 0 0' }}>
+                        {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '-'}
+                      </p>
                     </div>
                   </div>
                 </div>
 
+                {/* Sign Out */}
                 <div style={{
                   background: '#18181b',
                   border: '1px solid #27272a',
                   borderRadius: 12,
-                  padding: 24
+                  padding: 20,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                 }}>
-                  <h2 style={{ fontSize: 18, fontWeight: 600, color: 'white', margin: '0 0 16px 0' }}>Sign Out</h2>
-                  <p style={{ fontSize: 13, color: '#71717a', marginBottom: 16 }}>
-                    Sign out of your account on this device.
-                  </p>
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: 'white', margin: 0 }}>Sign out</p>
+                    <p style={{ fontSize: 12, color: '#52525b', margin: '2px 0 0 0' }}>
+                      Sign out of your account on this device
+                    </p>
+                  </div>
                   <button
                     onClick={handleLogout}
                     disabled={loggingOut}
                     style={{
-                      height: 40,
-                      padding: '0 20px',
-                      background: 'rgba(239, 68, 68, 0.1)',
+                      padding: '8px 16px',
+                      background: 'transparent',
                       color: '#f87171',
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: 500,
                       borderRadius: 8,
                       border: '1px solid rgba(239, 68, 68, 0.3)',
@@ -646,10 +807,10 @@ export function Settings({ onClose }: Props) {
                       opacity: loggingOut ? 0.6 : 1,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 8
+                      gap: 6,
                     }}
                   >
-                    <LogOut style={{ width: 16, height: 16 }} />
+                    <LogOut style={{ width: 14, height: 14 }} />
                     {loggingOut ? 'Signing out...' : 'Sign Out'}
                   </button>
                 </div>

@@ -12,6 +12,18 @@ import * as meetingChat from './meeting-chat'
 let mainWindow: BrowserWindow | null = null
 let activeSessionId: string | null = null
 
+// Update status tracking
+let updateStatus: {
+  available: boolean
+  version?: string
+  downloading?: boolean
+  downloaded?: boolean
+  checking?: boolean
+  lastChecked?: number
+  error?: string
+  releaseNotes?: string
+} = { available: false }
+
 const isDev = !app.isPackaged && process.env.NODE_ENV === 'development'
 
 if (process.platform === 'darwin') {
@@ -81,23 +93,75 @@ app.whenReady().then(async () => {
   // Auto-updater configuration
   if (!isDev) {
     autoUpdater.logger = console
-    autoUpdater.checkForUpdatesAndNotify()
+    autoUpdater.autoDownload = true
 
-    autoUpdater.on('update-available', () => {
-      console.log('Update available, downloading...')
+    autoUpdater.on('checking-for-update', () => {
+      console.log('Checking for update...')
+      updateStatus.checking = true
     })
 
-    autoUpdater.on('update-downloaded', () => {
-      console.log('Update downloaded, will install on quit')
-      // Optionally notify user via IPC
+    autoUpdater.on('update-available', (info) => {
+      console.log('Update available:', info.version)
+      updateStatus = {
+        available: true,
+        version: info.version,
+        downloading: true,
+        downloaded: false,
+        checking: false,
+        lastChecked: Date.now(),
+        releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined
+      }
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-downloaded')
+        mainWindow.webContents.send(IPC_CHANNELS.UPDATE_AVAILABLE, {
+          version: info.version,
+          releaseNotes: updateStatus.releaseNotes
+        })
       }
     })
 
+    autoUpdater.on('update-not-available', () => {
+      console.log('Update not available')
+      updateStatus = {
+        available: false,
+        checking: false,
+        lastChecked: Date.now()
+      }
+    })
+
+    autoUpdater.on('download-progress', (progress) => {
+      console.log(`Download progress: ${progress.percent.toFixed(1)}%`)
+      updateStatus.downloading = true
+    })
+
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log('Update downloaded, will install on quit')
+      updateStatus = {
+        available: true,
+        version: info.version,
+        downloading: false,
+        downloaded: true,
+        checking: false,
+        lastChecked: Date.now(),
+        releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : updateStatus.releaseNotes
+      }
+    })
+
+    autoUpdater.on('error', (err) => {
+      console.error('Auto-updater error:', err)
+      updateStatus = {
+        ...updateStatus,
+        checking: false,
+        downloading: false,
+        error: err.message
+      }
+    })
+
+    // Initial check
+    autoUpdater.checkForUpdates()
+
     // Check for updates every hour
     setInterval(() => {
-      autoUpdater.checkForUpdatesAndNotify()
+      autoUpdater.checkForUpdates()
     }, 60 * 60 * 1000)
   }
 
@@ -195,15 +259,42 @@ function registerIpcHandlers() {
     if (process.platform !== 'darwin') return null
     const release = process.getSystemVersion()
     const major = parseInt(release.split('.')[0], 10)
-    
+
     let macOSMajor = major
     let displayVersion = release
     if (major >= 22) {
       macOSMajor = major - 9
       displayVersion = `${macOSMajor}.0`
     }
-    
+
     return { version: displayVersion, major: macOSMajor }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.GET_APP_VERSION, () => {
+    return app.getVersion()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.GET_UPDATE_STATUS, () => {
+    return updateStatus
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CHECK_FOR_UPDATES, async () => {
+    if (isDev) {
+      return
+    }
+    updateStatus.checking = true
+    try {
+      await autoUpdater.checkForUpdates()
+    } catch (err) {
+      updateStatus.checking = false
+      updateStatus.error = (err as Error).message
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.INSTALL_UPDATE, () => {
+    if (updateStatus.downloaded) {
+      autoUpdater.quitAndInstall()
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.AUDIO_START_CAPTURE, async (_, micDeviceId?: string, systemDeviceId?: string) => {
@@ -239,7 +330,18 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle(IPC_CHANNELS.MEETING_CHAT_SEND, async (_, sessionId: string, message: string) => {
-    return meetingChat.chatWithMeeting(sessionId, message)
+    // Legacy handler - kept for backwards compatibility
+    console.warn('Using legacy MEETING_CHAT_SEND - switch to MEETING_CHAT_SEND_WITH_CONTEXT')
+  })
+
+  // New handler for Supabase-based flow
+  ipcMain.handle(IPC_CHANNELS.MEETING_CHAT_SEND_WITH_CONTEXT, async (_, meetingId: string, message: string, context: { transcript?: string; summary?: unknown; actionItems?: unknown; chatHistory: Array<{ role: string; content: string }> }) => {
+    return meetingChat.chatWithMeetingContext(meetingId, message, context)
+  })
+
+  // New handler for post-call processing (Supabase-based flow)
+  ipcMain.handle(IPC_CHANNELS.POST_CALL_PROCESS, async (_, meetingId: string, transcript: string) => {
+    return summarize.processPostCall(meetingId, transcript)
   })
 
   ipcMain.handle(IPC_CHANNELS.CALL_START, async () => {
@@ -267,14 +369,17 @@ function registerIpcHandlers() {
     return session
   })
 
+  // Legacy handler - kept for backwards compatibility but no longer used
+  // The renderer now handles call end via InCall.tsx and triggers POST_CALL_PROCESS
   ipcMain.handle(IPC_CHANNELS.CALL_END, async (_, sessionId: string) => {
     await audio.stopCapture()
     await realtime.disconnect()
     if (activeSessionId === sessionId) activeSessionId = null
-    
+
+    // Legacy: fetch from local db (no longer used, renderer uses Supabase)
     const session = db.getSession(sessionId)
     const segments = db.getTranscriptSegments(sessionId)
-    
+
     let transcript = ''
     if (segments.length > 0) {
       transcript = segments
@@ -284,9 +389,9 @@ function registerIpcHandlers() {
     } else if (session?.merged_transcript) {
       transcript = session.merged_transcript
     }
-    
+
     if (transcript) {
-      summarize.enqueuePostCallJob(sessionId, transcript)
+      summarize.processPostCall(sessionId, transcript)
     } else {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.CALL_FINALIZE_STATUS, {
@@ -297,10 +402,11 @@ function registerIpcHandlers() {
     }
   })
 
+  // Legacy handler - kept for backwards compatibility
   ipcMain.handle(IPC_CHANNELS.CALL_IMPORT_TRANSCRIPT, async (_, transcript: string) => {
     const session = db.createSession('Imported Meeting')
     db.updateSession(session.id, { merged_transcript: transcript })
-    summarize.enqueuePostCallJob(session.id, transcript)
+    summarize.processPostCall(session.id, transcript)
     return db.getSession(session.id)
   })
 }

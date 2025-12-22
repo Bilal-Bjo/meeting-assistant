@@ -25,6 +25,11 @@ export const IPC_CHANNELS = {
   GET_PLATFORM: 'system:get-platform',
   GET_DESKTOP_SOURCES: 'system:get-desktop-sources',
   GET_MACOS_VERSION: 'system:get-macos-version',
+  GET_APP_VERSION: 'system:get-app-version',
+  GET_UPDATE_STATUS: 'system:get-update-status',
+  CHECK_FOR_UPDATES: 'system:check-for-updates',
+  INSTALL_UPDATE: 'system:install-update',
+  UPDATE_AVAILABLE: 'system:update-available',
 
   REALTIME_CONNECT: 'realtime:connect',
   REALTIME_DISCONNECT: 'realtime:disconnect',
@@ -38,7 +43,12 @@ export const IPC_CHANNELS = {
   CALL_IMPORT_TRANSCRIPT: 'call:import-transcript',
   CALL_FINALIZE_STATUS: 'call:finalize-status',
 
+  // New channels for Supabase-based flow
+  POST_CALL_PROCESS: 'call:post-call-process',
+  POST_CALL_RESULT: 'call:post-call-result',
+
   MEETING_CHAT_SEND: 'meeting:chat-send',
+  MEETING_CHAT_SEND_WITH_CONTEXT: 'meeting:chat-send-with-context',
   MEETING_CHAT_DELTA: 'meeting:chat-delta',
   MEETING_CHAT_RESPONSE: 'meeting:chat-response',
 } as const
@@ -73,6 +83,11 @@ export interface IpcApi {
     getPlatform(): Promise<string>
     getDesktopSources(): Promise<DesktopSource[]>
     getMacOSVersion(): Promise<{ version: string; major: number } | null>
+    getAppVersion(): Promise<string>
+    getUpdateStatus(): Promise<{ available: boolean; version?: string; downloading?: boolean; downloaded?: boolean; checking?: boolean; lastChecked?: number; error?: string; releaseNotes?: string }>
+    checkForUpdates(): Promise<void>
+    installUpdate(): Promise<void>
+    onUpdateAvailable(callback: (info: { version: string; releaseNotes?: string }) => void): () => void
   }
   audio: {
     getDevices(): Promise<AudioDevice[]>
@@ -94,11 +109,14 @@ export interface IpcApi {
     end(sessionId: string): Promise<void>
     importTranscript(transcript: string): Promise<Session>
     onFinalizeStatus(callback: (status: { sessionId: string; stage: string; error?: string }) => void): () => void
+    processPostCall(meetingId: string, transcript: string): Promise<void>
+    onPostCallResult(callback: (data: { meetingId: string; summary: unknown; actionItems: unknown; error?: string }) => void): () => void
   }
   meetingChat: {
     send(sessionId: string, message: string): Promise<void>
-    onDelta(callback: (data: { sessionId: string; text: string }) => void): () => void
-    onResponse(callback: (data: { sessionId: string; text: string; error?: string }) => void): () => void
+    sendWithContext(meetingId: string, message: string, context: { transcript?: string; summary?: unknown; actionItems?: unknown; chatHistory: Array<{ role: string; content: string }> }): Promise<void>
+    onDelta(callback: (data: { meetingId: string; text: string }) => void): () => void
+    onResponse(callback: (data: { meetingId: string; text: string; error?: string }) => void): () => void
   }
 }
 

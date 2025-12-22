@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import type { Session, Settings as SettingsType } from '@shared/types'
-import { Settings, Trash2, Video, ChevronRight, BarChart3, Loader2, FileText, X } from 'lucide-react'
+import { meetingsDb, settingsDb, type DbMeeting } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { Settings, Trash2, Video, ChevronRight, BarChart3, Loader2, FileText, X, LogOut } from 'lucide-react'
 
 interface Props {
   onStartCall: () => void
@@ -11,7 +12,8 @@ interface Props {
 }
 
 export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpenAnalytics }: Props) {
-  const [sessions, setSessions] = useState<Session[]>([])
+  const { user, profile, signOut } = useAuth()
+  const [sessions, setSessions] = useState<DbMeeting[]>([])
   const [loading, setLoading] = useState(true)
   const [irlMode, setIrlMode] = useState(false)
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
@@ -19,11 +21,14 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
   const [platform, setPlatform] = useState<string>('darwin')
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<{ available: boolean; version?: string; downloaded?: boolean }>({ available: false })
+  const avatarRef = useRef<HTMLButtonElement>(null)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await window.api.db.getSessions()
+      const data = await meetingsDb.getAll()
       setSessions(data)
     } catch (err) {
       console.error('Failed to load sessions:', err)
@@ -34,11 +39,23 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
   useEffect(() => {
     loadSessions()
     window.api.system.getPlatform().then(setPlatform)
+    window.api.system.getUpdateStatus().then(setUpdateStatus)
+
+    // Click outside to close avatar menu
+    const handleClickOutside = (e: MouseEvent) => {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setShowAvatarMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [loadSessions])
 
   useEffect(() => {
-    window.api.settings.get().then((s: SettingsType) => {
-      setIrlMode(Boolean(s.irl_mode))
+    settingsDb.get().then((s) => {
+      if (s) {
+        // IRL mode would need to be added to settings if needed
+      }
     }).catch(() => {})
   }, [])
 
@@ -61,15 +78,12 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
   const handleToggleIrl = useCallback(async () => {
     const next = !irlMode
     setIrlMode(next)
-    try {
-      await window.api.settings.set({ irl_mode: next })
-    } catch {
-    }
+    // Settings update would go here if irl_mode is added to user_settings
   }, [irlMode])
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    await window.api.db.deleteSession(id)
+    await meetingsDb.delete(id)
     loadSessions()
   }
 
@@ -77,7 +91,12 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
     if (!importText.trim() || importing) return
     setImporting(true)
     try {
-      await window.api.call.importTranscript(importText.trim())
+      const meeting = await meetingsDb.create('Imported Meeting')
+      if (meeting) {
+        await meetingsDb.update(meeting.id, { merged_transcript: importText.trim() })
+        // Trigger summarization
+        window.api.call.importTranscript(importText.trim())
+      }
       setShowImportModal(false)
       setImportText('')
       loadSessions()
@@ -88,7 +107,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
   }
 
   const grouped = groupByDate(sessions)
-  const todayCount = sessions.filter(s => 
+  const todayCount = sessions.filter(s =>
     new Date(s.created_at).toDateString() === new Date().toDateString()
   ).length
 
@@ -132,51 +151,170 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
         paddingLeft: platform === 'darwin' ? 80 : 16,
         borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         position: 'relative',
-        zIndex: 1,
+        zIndex: 10,
         gap: 4,
         WebkitAppRegion: 'drag'
       } as React.CSSProperties}>
-        <button
-          onClick={onOpenAnalytics}
-          style={{
-            width: 36,
-            height: 36,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#525252',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            borderRadius: 8,
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties}
-          title="Analytics"
-        >
-          <BarChart3 style={{ width: 18, height: 18 }} />
-        </button>
-        <button
-          onClick={onOpenSettings}
-          style={{
-            width: 36,
-            height: 36,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#525252',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            borderRadius: 8,
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties}
-          title="Settings"
-        >
-          <Settings style={{ width: 18, height: 18 }} />
-        </button>
+        {/* User Avatar Dropdown */}
+        <div style={{ position: 'relative', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button
+            ref={avatarRef}
+            onClick={() => setShowAvatarMenu(!showAvatarMenu)}
+            style={{
+              height: 36,
+              padding: '0 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: showAvatarMenu ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, #5b7fff 0%, #3b5bdb 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'white',
+            }}>
+              {(profile?.full_name || user?.email || '?')[0].toUpperCase()}
+            </div>
+          </button>
+
+          <AnimatePresence>
+            {showAvatarMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                transition={{ duration: 0.12 }}
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 6,
+                  width: 220,
+                  background: '#1c1c1e',
+                  borderRadius: 12,
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                  overflow: 'hidden',
+                  zIndex: 100,
+                }}
+              >
+                {/* Profile Info */}
+                <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'white', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {profile?.full_name || 'User'}
+                  </p>
+                  <p style={{ fontSize: 11, color: '#71717a', margin: '3px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user?.email}
+                  </p>
+                </div>
+
+                {/* Menu Items */}
+                <div style={{ padding: '6px' }}>
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); onOpenAnalytics() }}
+                    style={{
+                      width: '100%',
+                      height: 36,
+                      padding: '0 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color: '#d4d4d8',
+                      fontSize: 13,
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <BarChart3 size={15} style={{ color: '#71717a' }} />
+                    Analytics
+                  </button>
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); onOpenSettings() }}
+                    style={{
+                      width: '100%',
+                      height: 36,
+                      padding: '0 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color: '#d4d4d8',
+                      fontSize: 13,
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <Settings size={15} style={{ color: '#71717a' }} />
+                    Settings
+                    {updateStatus.available && (
+                      <span style={{
+                        marginLeft: 'auto',
+                        padding: '2px 6px',
+                        background: updateStatus.downloaded ? 'rgba(34, 197, 94, 0.15)' : 'rgba(91, 127, 255, 0.15)',
+                        color: updateStatus.downloaded ? '#4ade80' : '#5b7fff',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        borderRadius: 4,
+                      }}>
+                        {updateStatus.downloaded ? 'Ready' : 'Update'}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* Sign Out */}
+                <div style={{ padding: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); signOut() }}
+                    style={{
+                      width: '100%',
+                      height: 36,
+                      padding: '0 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color: '#f87171',
+                      fontSize: 13,
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <LogOut size={15} />
+                    Sign Out
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </header>
 
-      <div style={{ 
+      <div style={{
         padding: '40px 32px 32px',
         background: 'linear-gradient(to bottom, rgba(91, 127, 255, 0.03), transparent)'
       }}>
@@ -328,8 +466,8 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
                       {label}
                     </span>
                   </div>
-                  <div style={{ 
-                    display: 'flex', 
+                  <div style={{
+                    display: 'flex',
                     flexDirection: 'column',
                     background: 'rgba(255, 255, 255, 0.02)',
                     borderRadius: 12,
@@ -502,7 +640,7 @@ export function Sessions({ onStartCall, onOpenSettings, onOpenCallDetail, onOpen
 }
 
 interface SessionCardProps {
-  session: Session
+  session: DbMeeting
   onClick: () => void
   onDelete: (e: React.MouseEvent) => void
   isLast: boolean
@@ -513,7 +651,7 @@ function SessionCard({ session, onClick, onDelete, isLast, isProcessing }: Sessi
   const [hovered, setHovered] = useState(false)
   const duration = session.duration_sec
   const hasRecording = duration > 0
-  
+
   const displayTitle = getDisplayTitle(session)
   const relativeTime = getRelativeTime(session.created_at)
 
@@ -610,29 +748,29 @@ function SessionCard({ session, onClick, onDelete, isLast, isProcessing }: Sessi
         </button>
       </div>
 
-      <ChevronRight 
-        style={{ 
-          width: 14, 
-          height: 14, 
+      <ChevronRight
+        style={{
+          width: 14,
+          height: 14,
           color: hovered ? '#a1a1aa' : '#52525b',
           transition: 'color 0.1s ease',
           flexShrink: 0
-        }} 
+        }}
       />
     </div>
   )
 }
 
-function getDisplayTitle(session: Session): string {
+function getDisplayTitle(session: DbMeeting): string {
   const hasCustomTitle = session.title && !session.title.match(/^Meeting \d{1,2}\/\d{1,2}\/\d{4}/)
-  
+
   if (hasCustomTitle) {
     return session.title!
   }
-  
+
   const date = new Date(session.created_at)
   const hour = date.getHours()
-  
+
   let timeOfDay: string
   if (hour >= 5 && hour < 12) {
     timeOfDay = 'Morning'
@@ -643,7 +781,7 @@ function getDisplayTitle(session: Session): string {
   } else {
     timeOfDay = 'Night'
   }
-  
+
   return `${timeOfDay} Meeting`
 }
 
@@ -653,11 +791,11 @@ function getRelativeTime(dateStr: string): string {
   const diffMs = now.getTime() - date.getTime()
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMs / 3600000)
-  
+
   if (diffMins < 1) return 'Just now'
   if (diffMins < 60) return `${diffMins}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
-  
+
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -665,8 +803,8 @@ function getRelativeTime(dateStr: string): string {
   }).toLowerCase()
 }
 
-function groupByDate(sessions: Session[]): Record<string, Session[]> {
-  const groups: Record<string, Session[]> = {}
+function groupByDate(sessions: DbMeeting[]): Record<string, DbMeeting[]> {
+  const groups: Record<string, DbMeeting[]> = {}
   const today = new Date().toDateString()
   const yesterday = new Date(Date.now() - 86400000).toDateString()
 

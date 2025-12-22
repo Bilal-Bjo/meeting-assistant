@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { Session } from '@shared/types'
+import { meetingsDb, onboardingDb, type DbMeeting, type MeetingSummary, type MeetingActionItems } from './lib/supabase'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { Login } from './pages/Login'
+import { Onboarding } from './pages/Onboarding'
 import { Sessions } from './pages/Sessions'
 import { InCall } from './pages/InCall'
 import { Settings } from './pages/Settings'
@@ -15,12 +16,39 @@ type AppView = 'sessions' | 'in-call' | 'settings' | 'meeting-detail' | 'analyti
 function AppContent() {
   const { user, loading } = useAuth()
   const [view, setView] = useState<AppView>('sessions')
-  const [currentSession, setCurrentSession] = useState<Session | null>(null)
-  const [detailSessionId, setDetailSessionId] = useState<string | null>(null)
+  const [currentMeeting, setCurrentMeeting] = useState<DbMeeting | null>(null)
+  const [detailMeetingId, setDetailMeetingId] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
+  const pendingPostCallRef = useRef<string | null>(null)
+
+  // Check onboarding status when user logs in
+  useEffect(() => {
+    if (!user) {
+      setOnboardingCompleted(null)
+      return
+    }
+
+    const checkOnboarding = async () => {
+      try {
+        const completed = await onboardingDb.isCompleted()
+        setOnboardingCompleted(completed)
+      } catch (err) {
+        console.error('Failed to check onboarding:', err)
+        // Default to completed to avoid blocking user
+        setOnboardingCompleted(true)
+      }
+    }
+
+    checkOnboarding()
+  }, [user])
+
+  const handleOnboardingComplete = useCallback(() => {
+    setOnboardingCompleted(true)
+  }, [])
 
   useEffect(() => {
-    const unsubscribe = window.api?.call?.onFinalizeStatus?.((status) => {
+    const unsubscribeStatus = window.api?.call?.onFinalizeStatus?.((status) => {
       if (status.stage === 'generating_summary') {
         setStatusMessage('Processing meeting...')
       } else if (status.stage === 'complete') {
@@ -30,35 +58,75 @@ function AppContent() {
         setTimeout(() => setStatusMessage(null), 5000)
       }
     })
-    return () => unsubscribe?.()
+
+    // Listen for post-call results and save to Supabase
+    const unsubscribeResult = window.api?.call?.onPostCallResult?.(async (data) => {
+      if (!data.error && data.meetingId) {
+        try {
+          const updates: Partial<DbMeeting> = {}
+          if (data.summary) {
+            updates.summary = data.summary as MeetingSummary
+            // Update title if generated
+            const summary = data.summary as MeetingSummary
+            if (summary.title) {
+              updates.title = summary.title
+            }
+          }
+          if (data.actionItems) {
+            updates.action_items = data.actionItems as MeetingActionItems
+          }
+          if (Object.keys(updates).length > 0) {
+            await meetingsDb.update(data.meetingId, updates)
+          }
+        } catch (err) {
+          console.error('Failed to save post-call results:', err)
+        }
+      }
+      pendingPostCallRef.current = null
+    })
+
+    return () => {
+      unsubscribeStatus?.()
+      unsubscribeResult?.()
+    }
   }, [])
 
   const handleStartMeeting = useCallback(async () => {
     try {
-      const session = await window.api.call.start()
-      setCurrentSession(session)
+      // Create meeting in Supabase
+      const title = `Meeting ${new Date().toLocaleString()}`
+      const meeting = await meetingsDb.create(title)
+      if (!meeting) {
+        console.error('Failed to create meeting')
+        return
+      }
+      setCurrentMeeting(meeting)
       setView('in-call')
+
+      // Start realtime connection
+      await window.api.realtime.connect(meeting.id)
     } catch (err) {
       console.error('Failed to start meeting:', err)
     }
   }, [])
 
   const handleEndMeeting = useCallback(async () => {
-    if (currentSession) {
-      await window.api.call.end(currentSession.id)
+    if (currentMeeting) {
+      await window.api.realtime.disconnect()
+      // The post-call processing will be triggered from InCall
     }
-    setCurrentSession(null)
+    setCurrentMeeting(null)
     setView('sessions')
-  }, [currentSession])
+  }, [currentMeeting])
 
   const handleOpenSettings = useCallback(() => setView('settings'), [])
   const handleCloseSettings = useCallback(() => setView('sessions'), [])
-  const handleOpenMeetingDetail = useCallback((sessionId: string) => {
-    setDetailSessionId(sessionId)
+  const handleOpenMeetingDetail = useCallback((meetingId: string) => {
+    setDetailMeetingId(meetingId)
     setView('meeting-detail')
   }, [])
   const handleCloseMeetingDetail = useCallback(() => {
-    setDetailSessionId(null)
+    setDetailMeetingId(null)
     setView('sessions')
   }, [])
   const handleOpenAnalytics = useCallback(() => setView('analytics'), [])
@@ -66,7 +134,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div 
+      <div
         className="h-screen flex items-center justify-center"
         style={{ background: '#161616' }}
       >
@@ -86,6 +154,30 @@ function AppContent() {
     return <Login />
   }
 
+  // Show loading while checking onboarding status
+  if (onboardingCompleted === null) {
+    return (
+      <div
+        className="h-screen flex items-center justify-center"
+        style={{ background: '#161616' }}
+      >
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}
+        >
+          <Loader2 size={32} className="animate-spin" style={{ color: '#5b7fff' }} />
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>Loading...</p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // Show onboarding for first-time users
+  if (!onboardingCompleted) {
+    return <Onboarding onComplete={handleOnboardingComplete} />
+  }
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--background-secondary)]">
       <AnimatePresence mode="wait">
@@ -98,19 +190,19 @@ function AppContent() {
             onOpenAnalytics={handleOpenAnalytics}
           />
         )}
-        {view === 'in-call' && currentSession && (
-          <InCall key="incall" session={currentSession} onEndCall={handleEndMeeting} />
+        {view === 'in-call' && currentMeeting && (
+          <InCall key="incall" meeting={currentMeeting} onEndCall={handleEndMeeting} />
         )}
         {view === 'settings' && <Settings key="settings" onClose={handleCloseSettings} />}
-        {view === 'meeting-detail' && detailSessionId && (
-          <MeetingDetail key="detail" sessionId={detailSessionId} onClose={handleCloseMeetingDetail} />
+        {view === 'meeting-detail' && detailMeetingId && (
+          <MeetingDetail key="detail" meetingId={detailMeetingId} onClose={handleCloseMeetingDetail} />
         )}
         {view === 'analytics' && <Analytics key="analytics" onClose={handleCloseAnalytics} />}
       </AnimatePresence>
 
       <AnimatePresence>
         {statusMessage && (
-          <motion.div 
+          <motion.div
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}

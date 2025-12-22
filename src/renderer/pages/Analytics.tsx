@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, TrendingUp, Video, Clock, Calendar, CheckCircle2 } from 'lucide-react'
-import type { Session } from '@shared/types'
+import { meetingsDb, type DbMeeting } from '../lib/supabase'
 import {
   AreaChart,
   Area,
@@ -18,14 +18,14 @@ interface Props {
 }
 
 export function Analytics({ onClose }: Props) {
-  const [sessions, setSessions] = useState<Session[]>([])
+  const [meetings, setMeetings] = useState<DbMeeting[]>([])
   const [loading, setLoading] = useState(true)
   const [platform, setPlatform] = useState<string>('darwin')
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const data = await window.api.db.getSessions()
-    setSessions(data)
+    const data = await meetingsDb.getAll()
+    setMeetings(data)
     setLoading(false)
   }, [])
 
@@ -34,7 +34,7 @@ export function Analytics({ onClose }: Props) {
     window.api.system.getPlatform().then(setPlatform)
   }, [loadData])
 
-  const stats = computeStats(sessions)
+  const stats = computeStats(meetings)
 
   return (
     <motion.div
@@ -102,7 +102,7 @@ export function Analytics({ onClose }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
             <div style={{ color: '#71717a', fontSize: 13 }}>Loading...</div>
           </div>
-        ) : sessions.length === 0 ? (
+        ) : meetings.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', textAlign: 'center' }}>
             <TrendingUp style={{ width: 32, height: 32, color: '#52525b', marginBottom: 16 }} />
             <p style={{ fontSize: 14, color: '#71717a' }}>No data yet. Complete some meetings to see analytics.</p>
@@ -296,28 +296,28 @@ interface Stats {
   meetingsByDay: { day: string; count: number }[]
 }
 
-function computeStats(sessions: Session[]): Stats {
+function computeStats(meetings: DbMeeting[]): Stats {
   const now = new Date()
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
-  
-  const durations = sessions.map(s => s.duration_sec).filter(d => d > 0)
+
+  const durations = meetings.map(m => m.duration_sec).filter(d => d > 0)
   const totalDuration = durations.reduce((a, b) => a + b, 0)
   const avgDuration = durations.length > 0 ? Math.round(totalDuration / durations.length) : 0
-  
-  const meetingsThisWeek = sessions.filter(s => new Date(s.created_at) >= weekAgo).length
-  const meetingsThisMonth = sessions.filter(s => new Date(s.created_at) >= thisMonthStart).length
-  const meetingsLastMonth = sessions.filter(s => {
-    const d = new Date(s.created_at)
+
+  const meetingsThisWeek = meetings.filter(m => new Date(m.created_at) >= weekAgo).length
+  const meetingsThisMonth = meetings.filter(m => new Date(m.created_at) >= thisMonthStart).length
+  const meetingsLastMonth = meetings.filter(m => {
+    const d = new Date(m.created_at)
     return d >= lastMonthStart && d <= lastMonthEnd
   }).length
 
   let totalActionItems = 0
   let completedActionItems = 0
-  sessions.forEach(s => {
-    const items = s.action_items?.action_items || []
+  meetings.forEach(m => {
+    const items = m.action_items?.action_items || []
     totalActionItems += items.length
     completedActionItems += items.filter(i => i.completed).length
   })
@@ -326,7 +326,7 @@ function computeStats(sessions: Session[]): Stats {
   for (let i = 13; i >= 0; i--) {
     const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
     const dateStr = date.toDateString()
-    const count = sessions.filter(s => new Date(s.created_at).toDateString() === dateStr).length
+    const count = meetings.filter(m => new Date(m.created_at).toDateString() === dateStr).length
     last14Days.push({
       label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       count
@@ -336,11 +336,11 @@ function computeStats(sessions: Session[]): Stats {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const meetingsByDay = dayNames.map(day => ({
     day,
-    count: sessions.filter(s => dayNames[new Date(s.created_at).getDay()] === day).length
+    count: meetings.filter(m => dayNames[new Date(m.created_at).getDay()] === day).length
   }))
 
   return {
-    totalMeetings: sessions.length,
+    totalMeetings: meetings.length,
     meetingsThisWeek,
     meetingsThisMonth,
     meetingsLastMonth,

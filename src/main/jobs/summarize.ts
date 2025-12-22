@@ -1,6 +1,5 @@
 import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
-import { db } from '../database'
 import { settingsStore } from '../settings'
 import type { SessionSummary, SessionActionItems } from '../../shared/types'
 
@@ -19,7 +18,7 @@ async function parseErrorMessage(response: Response): Promise<string> {
 }
 
 interface JobQueue {
-  sessionId: string
+  meetingId: string
   transcript: string
 }
 
@@ -31,53 +30,61 @@ export function setMainWindow(window: BrowserWindow) {
   mainWindow = window
 }
 
-export function enqueuePostCallJob(sessionId: string, transcript: string): void {
-  queue.push({ sessionId, transcript })
+// New function for Supabase-based flow - emits results to renderer
+export function processPostCall(meetingId: string, transcript: string): void {
+  queue.push({ meetingId, transcript })
   processQueue()
 }
 
 async function processQueue(): Promise<void> {
   if (processing || queue.length === 0) return
-  
+
   processing = true
   const job = queue.shift()!
-  
+
   try {
-    emitStatus(job.sessionId, 'generating_summary')
-    
+    emitStatus(job.meetingId, 'generating_summary')
+
     const settings = settingsStore.get()
     if (!settings.openai_api_key) {
       throw new Error('OpenAI API key not configured')
     }
-    
+
     const model = settings.feedback_model || 'gpt-4o'
     const [summary, actionItems] = await Promise.all([
       generateSummary(job.transcript, settings.openai_api_key, model, settings.language),
       generateActionItems(job.transcript, settings.openai_api_key, model, settings.language),
     ])
-    
-    db.setSummary(job.sessionId, summary)
-    db.setActionItems(job.sessionId, actionItems)
-    
-    if (summary.title) {
-      db.updateSession(job.sessionId, { title: summary.title })
-    }
-    
-    emitStatus(job.sessionId, 'complete')
+
+    // Emit results to renderer for saving to Supabase
+    emitPostCallResult(job.meetingId, summary, actionItems)
+    emitStatus(job.meetingId, 'complete')
   } catch (err) {
     console.error('Post-meeting job failed:', err)
-    emitStatus(job.sessionId, 'error', (err as Error).message)
+    emitPostCallResult(job.meetingId, null, null, (err as Error).message)
+    emitStatus(job.meetingId, 'error', (err as Error).message)
   } finally {
     processing = false
     processQueue()
   }
 }
 
-function emitStatus(sessionId: string, stage: string, error?: string): void {
+function emitStatus(meetingId: string, stage: string, error?: string): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_CHANNELS.CALL_FINALIZE_STATUS, {
-      sessionId,
+      sessionId: meetingId, // Keep sessionId for backwards compatibility with UI
       stage,
+      error,
+    })
+  }
+}
+
+function emitPostCallResult(meetingId: string, summary: SessionSummary | null, actionItems: SessionActionItems | null, error?: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.POST_CALL_RESULT, {
+      meetingId,
+      summary,
+      actionItems,
       error,
     })
   }

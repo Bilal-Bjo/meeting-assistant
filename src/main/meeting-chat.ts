@@ -1,6 +1,5 @@
 import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc'
-import { db } from './database'
 import { settingsStore } from './settings'
 
 let mainWindow: BrowserWindow | null = null
@@ -13,38 +12,47 @@ function isResponsesModel(model: string): boolean {
   return model.startsWith('gpt-5')
 }
 
-export async function chatWithMeeting(sessionId: string, userMessage: string): Promise<void> {
+interface MeetingContext {
+  transcript?: string
+  summary?: unknown
+  actionItems?: unknown
+  chatHistory: Array<{ role: string; content: string }>
+}
+
+// New function that receives meeting context from renderer (for Supabase flow)
+export async function chatWithMeetingContext(
+  meetingId: string,
+  userMessage: string,
+  context: MeetingContext
+): Promise<void> {
   const settings = settingsStore.get()
   if (!settings.openai_api_key) {
-    emitChatResponse(sessionId, '', 'OpenAI API key not configured')
+    emitChatResponse(meetingId, '', 'OpenAI API key not configured')
     return
   }
 
-  const session = db.getSession(sessionId)
-  if (!session) {
-    emitChatResponse(sessionId, '', 'Session not found')
-    return
-  }
-
-  db.addMeetingChat({ session_id: sessionId, role: 'user', content: userMessage })
-
-  const chatHistory = db.getMeetingChats(sessionId)
   const model = settings.feedback_model || 'gpt-4o'
   const lang = settings.language === 'nl' ? 'Dutch' : settings.language === 'fr' ? 'French' : 'English'
 
   const systemPrompt = `You are a helpful assistant that answers questions about a meeting. You have access to the full meeting transcript and should provide accurate, helpful answers based on what was discussed.
 
 Meeting Transcript:
-${session.merged_transcript || 'No transcript available'}
+${context.transcript || 'No transcript available'}
 
-${session.summary ? `Meeting Summary: ${JSON.stringify(session.summary)}` : ''}
-${session.action_items ? `Action Items: ${JSON.stringify(session.action_items)}` : ''}
+${context.summary ? `Meeting Summary: ${JSON.stringify(context.summary)}` : ''}
+${context.actionItems ? `Action Items: ${JSON.stringify(context.actionItems)}` : ''}
 
 Instructions:
 - Answer questions accurately based on the meeting content
 - If something wasn't discussed in the meeting, say so
 - Be concise but thorough
 - Respond in ${lang}`
+
+  // Build chat history including new user message
+  const chatMessages = [
+    ...context.chatHistory.map(c => ({ role: c.role, content: c.content })),
+    { role: 'user', content: userMessage }
+  ]
 
   try {
     const url = isResponsesModel(model)
@@ -53,14 +61,14 @@ Instructions:
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...chatHistory.map(c => ({ role: c.role, content: c.content }))
+      ...chatMessages
     ]
 
     const body = isResponsesModel(model)
       ? {
           model,
           instructions: systemPrompt,
-          input: chatHistory.map(c => ({ role: c.role, content: c.content })),
+          input: chatMessages,
           stream: true,
         }
       : {
@@ -85,13 +93,13 @@ Instructions:
         const errorJson = JSON.parse(errorText)
         errorMessage = errorJson.error?.message || errorMessage
       } catch { /* ignore */ }
-      emitChatResponse(sessionId, '', errorMessage)
+      emitChatResponse(meetingId, '', errorMessage)
       return
     }
 
     const reader = response.body?.getReader()
     if (!reader) {
-      emitChatResponse(sessionId, '', 'Failed to read response stream')
+      emitChatResponse(meetingId, '', 'Failed to read response stream')
       return
     }
 
@@ -111,37 +119,39 @@ Instructions:
 
         try {
           const parsed = JSON.parse(data)
-          const content = parsed.choices?.[0]?.delta?.content || 
+          const content = parsed.choices?.[0]?.delta?.content ||
                          parsed.delta?.text ||
                          parsed.output_text ||
                          ''
           if (content) {
             fullResponse += content
-            emitChatDelta(sessionId, content)
+            emitChatDelta(meetingId, content)
           }
         } catch { /* ignore parse errors */ }
       }
     }
 
-    db.addMeetingChat({ session_id: sessionId, role: 'assistant', content: fullResponse })
-    emitChatResponse(sessionId, fullResponse)
+    // Emit full response - renderer will save to Supabase
+    emitChatResponse(meetingId, fullResponse)
 
   } catch (err) {
-    emitChatResponse(sessionId, '', (err as Error).message)
+    emitChatResponse(meetingId, '', (err as Error).message)
   }
 }
 
-function emitChatDelta(sessionId: string, text: string): void {
+function emitChatDelta(meetingId: string, text: string): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_CHANNELS.MEETING_CHAT_DELTA, { sessionId, text })
+    mainWindow.webContents.send(IPC_CHANNELS.MEETING_CHAT_DELTA, { meetingId, text })
   }
 }
 
-function emitChatResponse(sessionId: string, text: string, error?: string): void {
+function emitChatResponse(meetingId: string, text: string, error?: string): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_CHANNELS.MEETING_CHAT_RESPONSE, { sessionId, text, error })
+    mainWindow.webContents.send(IPC_CHANNELS.MEETING_CHAT_RESPONSE, { meetingId, text, error })
   }
 }
+
+
 
 
 

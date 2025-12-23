@@ -31,15 +31,18 @@ if (process.platform === 'darwin') {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin'
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#161616',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    ...(isMac && { trafficLightPosition: { x: 16, y: 16 } }),
     autoHideMenuBar: true,
+    frame: !isMac, // Show frame on Windows/Linux
     webPreferences: {
       preload: path.join(__dirname, '../../preload/preload.js'),
       contextIsolation: true,

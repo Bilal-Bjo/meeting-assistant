@@ -72,8 +72,7 @@
     "publish": {
       "provider": "github",
       "owner": "Bilal-Bjo",
-      "repo": "meeting-assistant",
-      "private": true
+      "repo": "meeting-assistant"
     },
     "mac": {
       "target": [

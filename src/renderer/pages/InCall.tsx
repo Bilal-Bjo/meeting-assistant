@@ -160,13 +160,29 @@ registerProcessor('pcm-processor', PCMProcessor)
     const macVersion = await window.api.system.getMacOSVersion()
 
     try {
-      if (platform === 'darwin' && macVersion && macVersion.major >= 13) {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      // macOS 13+ supports system audio via getDisplayMedia
+      // Windows also supports getDisplayMedia with audio
+      const isMacSupported = platform === 'darwin' && macVersion && macVersion.major >= 13
+      const isWindows = platform === 'win32'
+
+      if (isMacSupported || isWindows) {
+        console.log('[system-audio] Requesting display media for system audio...')
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        })
+        // Stop video track - we only need audio
         for (const t of stream.getVideoTracks()) t.stop()
+
         if (stream.getAudioTracks().length > 0) {
+          console.log('[system-audio] Got audio track, connecting worklet')
           systemStreamRef.current = stream
           connectSystemWorklet(meetingId, ctx, stream)
+        } else {
+          console.warn('[system-audio] No audio track in stream')
         }
+      } else {
+        console.log('[system-audio] Platform not supported:', platform, macVersion)
       }
     } catch (e) {
       console.warn('[system-audio] Failed:', e)

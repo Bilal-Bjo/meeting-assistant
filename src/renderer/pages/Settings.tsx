@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Volume2, Cpu, Monitor, X, User, LogOut, Loader2 } from 'lucide-react'
+import { ArrowLeft, Volume2, Cpu, Monitor, X, User, LogOut, Loader2, MessageSquare } from 'lucide-react'
 import type { Settings as SettingsType } from '@shared/types'
 import type { DesktopSource } from '@shared/ipc'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,12 +10,13 @@ interface Props {
   initialTab?: string
 }
 
-type Tab = 'account' | 'audio' | 'ai'
+type Tab = 'account' | 'audio' | 'ai' | 'context'
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'account', label: 'Account', icon: <User style={{ width: 18, height: 18 }} /> },
   { id: 'audio', label: 'Audio', icon: <Volume2 style={{ width: 18, height: 18 }} /> },
   { id: 'ai', label: 'AI Models', icon: <Cpu style={{ width: 18, height: 18 }} /> },
+  { id: 'context', label: 'Context', icon: <MessageSquare style={{ width: 18, height: 18 }} /> },
 ]
 
 function MacOSAudioSection({ 
@@ -813,6 +814,49 @@ export function Settings({ onClose, initialTab }: Props) {
                     <LogOut style={{ width: 14, height: 14 }} />
                     {loggingOut ? 'Signing out...' : 'Sign Out'}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'context' && (
+              <div style={{
+                background: '#18181b',
+                border: '1px solid #27272a',
+                borderRadius: 12,
+                padding: 24
+              }}>
+                <h2 style={{ fontSize: 18, fontWeight: 600, color: 'white', margin: '0 0 8px 0' }}>AI Context</h2>
+                <p style={{ fontSize: 13, color: '#71717a', margin: '0 0 20px 0', lineHeight: 1.5 }}>
+                  Provide context about yourself and your work. This helps the AI generate more relevant summaries and action items.
+                </p>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#a1a1aa', marginBottom: 8 }}>
+                    Your Context
+                  </label>
+                  <textarea
+                    value={settings.ai_context || ''}
+                    onChange={(e) => handleChange('ai_context', e.target.value)}
+                    placeholder="Example: I am John, a senior developer at Acme Corp. I work on the mobile team and lead the iOS development. My manager is Sarah. We use Jira for task tracking..."
+                    style={{
+                      width: '100%',
+                      minHeight: 180,
+                      padding: 12,
+                      background: '#18181b',
+                      color: 'white',
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      border: '1px solid #3f3f46',
+                      borderRadius: 8,
+                      outline: 'none',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <p style={{ fontSize: 12, color: '#52525b', marginTop: 12, lineHeight: 1.5 }}>
+                    This context will be included when generating meeting summaries and extracting action items,
+                    helping the AI understand who you are, your role, and how to assign tasks appropriately.
+                  </p>
                 </div>
               </div>
             )}

@@ -52,8 +52,8 @@ async function processQueue(): Promise<void> {
 
     const model = settings.feedback_model || 'gpt-4o'
     const [summary, actionItems] = await Promise.all([
-      generateSummary(job.transcript, settings.openai_api_key, model, settings.language),
-      generateActionItems(job.transcript, settings.openai_api_key, model, settings.language),
+      generateSummary(job.transcript, settings.openai_api_key, model, settings.language, settings.ai_context),
+      generateActionItems(job.transcript, settings.openai_api_key, model, settings.language, settings.ai_context),
     ])
 
     // Emit results to renderer for saving to Supabase
@@ -90,9 +90,10 @@ function emitPostCallResult(meetingId: string, summary: SessionSummary | null, a
   }
 }
 
-async function generateSummary(transcript: string, apiKey: string, model: string, language?: string): Promise<SessionSummary> {
+async function generateSummary(transcript: string, apiKey: string, model: string, language?: string, aiContext?: string): Promise<SessionSummary> {
   const lang = language === 'nl' ? 'Dutch' : language === 'fr' ? 'French' : 'English'
-  const system = `You are a meeting analyzer. Given a transcript, generate a structured summary.
+  const contextSection = aiContext ? `\n\nUser context (use this to better understand the meeting participants and their roles):\n${aiContext}\n` : ''
+  const system = `You are a meeting analyzer. Given a transcript, generate a structured summary.${contextSection}
 Return JSON with these fields:
 - title: A short title for the meeting (max 50 chars)
 - summary: A 2-4 sentence executive summary of what was discussed
@@ -152,9 +153,10 @@ Write all text fields in ${lang}.`
   }
 }
 
-async function generateActionItems(transcript: string, apiKey: string, model: string, language?: string): Promise<SessionActionItems> {
+async function generateActionItems(transcript: string, apiKey: string, model: string, language?: string, aiContext?: string): Promise<SessionActionItems> {
   const lang = language === 'nl' ? 'Dutch' : language === 'fr' ? 'French' : 'English'
-  const system = `You are a meeting action item extractor. Analyze the transcript and identify all action items, tasks, and follow-ups mentioned.
+  const contextSection = aiContext ? `\n\nUser context (use this to better understand who the user is and assign tasks appropriately):\n${aiContext}\n` : ''
+  const system = `You are a meeting action item extractor. Analyze the transcript and identify all action items, tasks, and follow-ups mentioned.${contextSection}
 Return JSON with these fields:
 - action_items: Array of objects with:
   - task: The specific task or action to be done

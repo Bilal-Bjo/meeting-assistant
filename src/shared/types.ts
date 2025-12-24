@@ -66,6 +66,7 @@ export interface Settings {
   system_audio_device_id?: string
   desktop_source_id?: string
   system_audio_mode: 'blackhole' | 'wasapi' | 'loopback'
+  ai_context?: string
 }
 
 export interface RealtimeEvent {

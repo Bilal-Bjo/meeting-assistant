@@ -135,7 +135,7 @@ app.whenReady().then(async () => {
     })
 
     autoUpdater.on('update-downloaded', (info) => {
-      console.log('Update downloaded, will install on quit')
+      console.log('Update downloaded, installing now...')
       updateStatus = {
         available: true,
         version: info.version,
@@ -145,6 +145,10 @@ app.whenReady().then(async () => {
         lastChecked: Date.now(),
         releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : updateStatus.releaseNotes
       }
+      // Auto-install after a short delay
+      setTimeout(() => {
+        autoUpdater.quitAndInstall()
+      }, 1500)
     })
 
     autoUpdater.on('error', (err) => {

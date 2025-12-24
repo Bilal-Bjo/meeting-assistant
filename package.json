@@ -1,6 +1,6 @@
 {
   "name": "meeting-copilot",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "TLDM - Too Long; Didn't Meet - AI-powered meeting transcription and analysis",
   "main": "dist/main/main/index.js",
   "scripts": {

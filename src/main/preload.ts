@@ -1,17 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const IPC_CHANNELS = {
-  DB_GET_SESSIONS: 'db:get-sessions',
-  DB_GET_SESSION: 'db:get-session',
-  DB_CREATE_SESSION: 'db:create-session',
-  DB_UPDATE_SESSION: 'db:update-session',
-  DB_DELETE_SESSION: 'db:delete-session',
-  DB_GET_TRANSCRIPT_SEGMENTS: 'db:get-transcript-segments',
-  DB_ADD_TRANSCRIPT_SEGMENT: 'db:add-transcript-segment',
-  DB_SET_SUMMARY: 'db:set-summary',
-  DB_SET_ACTION_ITEMS: 'db:set-action-items',
-  DB_GET_MEETING_CHATS: 'db:get-meeting-chats',
-  DB_ADD_MEETING_CHAT: 'db:add-meeting-chat',
+  // Note: DB_* channels removed - renderer uses Supabase directly
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   GET_PLATFORM: 'system:get-platform',
@@ -46,19 +36,7 @@ const IPC_CHANNELS = {
 } as const
 
 const api = {
-  db: {
-    getSessions: () => ipcRenderer.invoke(IPC_CHANNELS.DB_GET_SESSIONS),
-    getSession: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DB_GET_SESSION, id),
-    createSession: (title: string) => ipcRenderer.invoke(IPC_CHANNELS.DB_CREATE_SESSION, title),
-    updateSession: (id: string, updates: Record<string, unknown>) => ipcRenderer.invoke(IPC_CHANNELS.DB_UPDATE_SESSION, id, updates),
-    deleteSession: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DB_DELETE_SESSION, id),
-    getTranscriptSegments: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.DB_GET_TRANSCRIPT_SEGMENTS, sessionId),
-    addTranscriptSegment: (segment: Record<string, unknown>) => ipcRenderer.invoke(IPC_CHANNELS.DB_ADD_TRANSCRIPT_SEGMENT, segment),
-    setSummary: (sessionId: string, summary: Record<string, unknown>) => ipcRenderer.invoke(IPC_CHANNELS.DB_SET_SUMMARY, sessionId, summary),
-    setActionItems: (sessionId: string, actionItems: Record<string, unknown>) => ipcRenderer.invoke(IPC_CHANNELS.DB_SET_ACTION_ITEMS, sessionId, actionItems),
-    getMeetingChats: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.DB_GET_MEETING_CHATS, sessionId),
-    addMeetingChat: (chat: Record<string, unknown>) => ipcRenderer.invoke(IPC_CHANNELS.DB_ADD_MEETING_CHAT, chat),
-  },
+  // Note: db API removed - renderer uses Supabase directly
   settings: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),
     set: (settings: Record<string, unknown>) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, settings),

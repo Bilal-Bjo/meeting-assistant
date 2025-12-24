@@ -1,17 +1,7 @@
-import type { Session, TranscriptSegment, Settings, AudioDevice, RealtimeEvent, MeetingChat } from './types'
+import type { Session, Settings, AudioDevice, RealtimeEvent } from './types'
 
 export const IPC_CHANNELS = {
-  DB_GET_SESSIONS: 'db:get-sessions',
-  DB_GET_SESSION: 'db:get-session',
-  DB_CREATE_SESSION: 'db:create-session',
-  DB_UPDATE_SESSION: 'db:update-session',
-  DB_DELETE_SESSION: 'db:delete-session',
-  DB_GET_TRANSCRIPT_SEGMENTS: 'db:get-transcript-segments',
-  DB_ADD_TRANSCRIPT_SEGMENT: 'db:add-transcript-segment',
-  DB_SET_SUMMARY: 'db:set-summary',
-  DB_SET_ACTION_ITEMS: 'db:set-action-items',
-  DB_GET_MEETING_CHATS: 'db:get-meeting-chats',
-  DB_ADD_MEETING_CHAT: 'db:add-meeting-chat',
+  // Note: DB_* channels removed - renderer uses Supabase directly
 
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
@@ -62,19 +52,7 @@ export interface DesktopSource {
 }
 
 export interface IpcApi {
-  db: {
-    getSessions(): Promise<Session[]>
-    getSession(id: string): Promise<Session | null>
-    createSession(title: string): Promise<Session>
-    updateSession(id: string, updates: Partial<Session>): Promise<void>
-    deleteSession(id: string): Promise<void>
-    getTranscriptSegments(sessionId: string): Promise<TranscriptSegment[]>
-    addTranscriptSegment(segment: Omit<TranscriptSegment, 'id'>): Promise<TranscriptSegment>
-    setSummary(sessionId: string, summary: Session['summary']): Promise<void>
-    setActionItems(sessionId: string, actionItems: Session['action_items']): Promise<void>
-    getMeetingChats(sessionId: string): Promise<MeetingChat[]>
-    addMeetingChat(chat: Omit<MeetingChat, 'id' | 'created_at'>): Promise<MeetingChat>
-  }
+  // Note: db API removed - renderer uses Supabase directly
   settings: {
     get(): Promise<Settings>
     set(settings: Partial<Settings>): Promise<void>

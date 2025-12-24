@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, globalShortcut, desktopCapturer, session }
 import { autoUpdater } from 'electron-updater'
 import path from 'path'
 import { IPC_CHANNELS } from '../shared/ipc'
-import { initDatabase, db } from './database'
 import { settingsStore } from './settings'
 import * as audio from './audio'
 import * as realtime from './realtime'
@@ -68,7 +67,6 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  initDatabase()
   registerIpcHandlers()
   createWindow()
 
@@ -186,49 +184,7 @@ app.on('will-quit', () => {
 })
 
 function registerIpcHandlers() {
-  ipcMain.handle(IPC_CHANNELS.DB_GET_SESSIONS, () => {
-    return db.getSessions()
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_GET_SESSION, (_, id: string) => {
-    return db.getSession(id)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_CREATE_SESSION, (_, title: string) => {
-    return db.createSession(title)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_UPDATE_SESSION, (_, id: string, updates: Record<string, unknown>) => {
-    return db.updateSession(id, updates)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_DELETE_SESSION, (_, id: string) => {
-    return db.deleteSession(id)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_GET_TRANSCRIPT_SEGMENTS, (_, sessionId: string) => {
-    return db.getTranscriptSegments(sessionId)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_ADD_TRANSCRIPT_SEGMENT, (_, segment: Omit<import('../shared/types').TranscriptSegment, 'id'>) => {
-    return db.addTranscriptSegment(segment)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_SET_SUMMARY, (_, sessionId: string, summary: Record<string, unknown>) => {
-    return db.setSummary(sessionId, summary)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_SET_ACTION_ITEMS, (_, sessionId: string, actionItems: Record<string, unknown>) => {
-    return db.setActionItems(sessionId, actionItems)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_GET_MEETING_CHATS, (_, sessionId: string) => {
-    return db.getMeetingChats(sessionId)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.DB_ADD_MEETING_CHAT, (_, chat: Record<string, unknown>) => {
-    return db.addMeetingChat(chat as Omit<import('../shared/types').MeetingChat, 'id' | 'created_at'>)
-  })
+  // Note: DB_* handlers removed - renderer uses Supabase directly
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, () => {
     return settingsStore.get()
@@ -347,69 +303,22 @@ function registerIpcHandlers() {
     return summarize.processPostCall(meetingId, transcript)
   })
 
+  // Legacy handler - no longer used, renderer creates meetings via Supabase
   ipcMain.handle(IPC_CHANNELS.CALL_START, async () => {
-    const title = `Meeting ${new Date().toLocaleString()}`
-    const session = db.createSession(title)
-    activeSessionId = session.id
-    
-    void (async () => {
-      try {
-        const settings = settingsStore.get()
-        if (!settings.openai_api_key) {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS.REALTIME_EVENT, { type: 'error', error: 'OpenAI API key not configured' })
-          }
-          return
-        }
-        await realtime.connect(session.id)
-      } catch (err) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_CHANNELS.REALTIME_EVENT, { type: 'error', error: (err as Error).message })
-        }
-      }
-    })()
-
-    return session
+    console.warn('CALL_START is deprecated - use Supabase flow')
+    return null
   })
 
-  // Legacy handler - kept for backwards compatibility but no longer used
-  // The renderer now handles call end via InCall.tsx and triggers POST_CALL_PROCESS
+  // Legacy handler - no longer used, renderer handles call end via InCall.tsx
   ipcMain.handle(IPC_CHANNELS.CALL_END, async (_, sessionId: string) => {
     await audio.stopCapture()
     await realtime.disconnect()
     if (activeSessionId === sessionId) activeSessionId = null
-
-    // Legacy: fetch from local db (no longer used, renderer uses Supabase)
-    const session = db.getSession(sessionId)
-    const segments = db.getTranscriptSegments(sessionId)
-
-    let transcript = ''
-    if (segments.length > 0) {
-      transcript = segments
-        .sort((a, b) => a.start_ms - b.start_ms)
-        .map(s => `${s.speaker === 'you' ? 'You' : 'Participant'}: ${s.text}`)
-        .join('\n')
-    } else if (session?.merged_transcript) {
-      transcript = session.merged_transcript
-    }
-
-    if (transcript) {
-      summarize.processPostCall(sessionId, transcript)
-    } else {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_CHANNELS.CALL_FINALIZE_STATUS, {
-          sessionId,
-          stage: 'complete',
-        })
-      }
-    }
   })
 
-  // Legacy handler - kept for backwards compatibility
-  ipcMain.handle(IPC_CHANNELS.CALL_IMPORT_TRANSCRIPT, async (_, transcript: string) => {
-    const session = db.createSession('Imported Meeting')
-    db.updateSession(session.id, { merged_transcript: transcript })
-    summarize.processPostCall(session.id, transcript)
-    return db.getSession(session.id)
+  // Legacy handler - no longer functional without local DB
+  ipcMain.handle(IPC_CHANNELS.CALL_IMPORT_TRANSCRIPT, async () => {
+    console.warn('CALL_IMPORT_TRANSCRIPT is deprecated - use Supabase flow')
+    return null
   })
 }
